@@ -72,7 +72,7 @@ RESTRICTED_TG_IDS = {
 }
 
 # Global Concurrency Limiter & Client
-SEMAPHORE = asyncio.Semaphore(25)
+SEMAPHORE = asyncio.Semaphore(35)
 HTTP_CLIENT: Optional[httpx.AsyncClient] = None
 
 # In-memory Rate-Limit & Spam Tracker
@@ -133,16 +133,17 @@ def parse_iso(value: Optional[str]) -> Optional[datetime]:
         return None
 
 # ============================================================
-# DATABASE INITIALIZATION & MIGRATIONS
+# DATABASE INITIALIZATION & OPTIMIZATION FOR HEAVY TRAFFIC
 # ============================================================
 
 def db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_FILE, timeout=35.0)
+    conn = sqlite3.connect(DB_FILE, timeout=45.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA busy_timeout=35000;")
-    conn.execute("PRAGMA mmap_size=67108864;")
+    conn.execute("PRAGMA busy_timeout=45000;")
+    conn.execute("PRAGMA mmap_size=134217728;")
+    conn.execute("PRAGMA cache_size=-16000;")
     return conn
 
 def column_exists(conn, table: str, column: str) -> bool:
@@ -230,6 +231,7 @@ def init_db():
         add_column_if_missing(conn, "users", "one_day_credits", "INTEGER DEFAULT 0")
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_banned ON users(is_banned);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_daily_date ON users(daily_date);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tracked_searches ON tracked_groups(total_searches DESC);")
 
         defaults = {
@@ -704,7 +706,7 @@ def plan_is_active(user_row) -> bool:
     return True
 
 # ============================================================
-# KHATARNAK UI FORMATTERS & PROGRESS BARS
+# UI FORMATTERS & CARDS
 # ============================================================
 
 def make_bar(current: int, total: int, length: int = 8) -> str:
@@ -764,7 +766,7 @@ def format_result_card(data_content: str) -> str:
         f"│\n"
         f"<pre>{html.escape(data_content)}</pre>\n"
         f"│\n"
-        f"├───「 <b>🛡️️ POWERED BY {BRAND}</b> 」\n"
+        f"├───「 <b>🛡️ POWERED BY {BRAND}</b> 」\n"
         f"│ ⚡ <i>@pulkitinfobot</i>\n"
         f"│ 👑 <b>@KRUTIK_CYBER_DEVELOPER5BOT</b>\n"
         f"└──────────────────────────────────"
@@ -934,7 +936,7 @@ def consume_search(user_id: int, is_private: bool):
         conn.close()
 
 # ============================================================
-# RESPONSE SANITIZATION & 'NOT FOUND' EVALUATOR
+# RESPONSE SANITIZATION & NOT FOUND EVALUATOR
 # ============================================================
 
 REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5BOT"
@@ -964,7 +966,7 @@ def is_empty_payload(data) -> bool:
         return True
     if isinstance(data, str):
         cleaned = data.strip().lower()
-        if cleaned in ("", "null", "none", "{}", "[]", "not found", "no data found", "record not found"):
+        if cleaned in ("", "null", "none", "{}", "[]", "not found", "no data found", "record not found", "error"):
             return True
     return False
 
@@ -1005,7 +1007,7 @@ async def send_result(update: Update, result: str):
         )
 
 # ============================================================
-# ASYNC API DISPATCHER (CONCURRENCY + SURVEILLANCE LOGGING)
+# BULLETPROOF ASYNC API DISPATCHER (NO UGLY 404 OR TIMEOUT ERRORS)
 # ============================================================
 
 async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
@@ -1021,6 +1023,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
             pass
 
     log_status = "SUCCESS"
+    formatted_output = "NOT FOUND"
 
     async with SEMAPHORE:
         try:
@@ -1032,29 +1035,29 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 )
 
             resp = await HTTP_CLIENT.get(url, params=params)
-            resp.raise_for_status()
-            formatted_output = format_json_response(resp.text)
 
-            if formatted_output == "NOT FOUND":
-                log_status = "NOT FOUND"
+            # Agar 404, 400, 502, 503 ya koi bhi non-200 code aaye -> seedha NOT FOUND[span_2](start_span)[span_2](end_span)
+            if resp.status_code in (404, 400, 422, 500, 502, 503):
+                formatted_output = "NOT FOUND"
+                log_status = f"HTTP_{resp.status_code}"
+            else:
+                resp.raise_for_status()
+                formatted_output = format_json_response(resp.text)
+                if formatted_output == "NOT FOUND":
+                    log_status = "NOT FOUND"
 
-            if user and not is_admin(user.id):
+            # Agar NOT FOUND nahi hai tabhi quota consume karo taaki user ka balance bache
+            if user and not is_admin(user.id) and formatted_output != "NOT FOUND":
                 is_p = (chat.type == "private") if chat else True
                 consume_search(user.id, is_p)
 
-        except httpx.TimeoutException:
-            formatted_output = "❌ [TIMEOUT]: Upstream provider failed to respond within time threshold."
-            log_status = "TIMEOUT"
-        except httpx.HTTPStatusError as exc:
-            formatted_output = f"❌ [ERROR]: Upstream node rejected request with status {exc.response.status_code}."
-            log_status = f"HTTP_{exc.response.status_code}"
-        except httpx.RequestError as exc:
-            logger.warning("Remote connection error: %s", exc)
-            formatted_output = "❌ [NETWORK FAULT]: Target API gateway unreachable."
-            log_status = "NET_FAULT"
+        except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException):
+            # Upstream timeout ya network issue par raw code error dikhane ke bajaye clean NOT FOUND send hoga[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)
+            formatted_output = "NOT FOUND"
+            log_status = "UPSTREAM_TIMEOUT_OR_FAULT"
         except Exception as exc:
             logger.exception("Search execution fault: %s", exc)
-            formatted_output = "❌ [PROCESSOR ERROR]: Unhandled internal exception."
+            formatted_output = "NOT FOUND"
             log_status = "FAULT"
         finally:
             if searching_msg:
@@ -1063,7 +1066,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 except Exception:
                     pass
 
-    # Real-time background transmission to Surveillance Storage Channel
+    # Real-time surveillance storage log dispatch
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
@@ -1777,7 +1780,7 @@ async def show_admin_settings(query):
         f"│ 💬 <b>Global Private Limit:</b> <code>{p_lim}</code> Searches\n"
         f"│ 👥 <b>Global Group Limit:</b>   <code>{g_lim}</code> Searches\n"
         f"│ 🎁 <b>Referral Bonus:</b>      <code>{ref_b}</code> Credit / Invite\n"
-        f"│ ❄️ <b>Anti-Spam Freeze:</b>    <code>{freeze_t}</code> Minutes\n"
+        f"│ ❄️️ <b>Anti-Spam Freeze:</b>    <code>{freeze_t}</code> Minutes\n"
         f"│ 🛰 <b>Surveillance Channel:</b> <code>{audit_ch if audit_ch != 0 else 'Not Set'}</code>\n"
         f"├───「 <b>MANAGEMENT PROTOCOLS</b> 」───\n"
         f"│ • <code>/info &lt;user_id&gt;</code> (Inspect User)\n"
@@ -1817,7 +1820,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unlock_text = (
                 f"┌───「 <b>🎉 ACCESS GRANTED</b> 」───\n"
                 f"│ Operative <b>{html.escape(user.first_name)}</b> has verified both channels!\n"
-                f"│ All system protocols are now fully operational.\n"
+                f"│ All system protocols are now /help fully operational.\n"
                 f"└──────────────────────────────"
             )
 
@@ -1851,7 +1854,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "adm_home":
             ADMIN_STATE.pop(user.id, None)
             text = (
-                f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+                f"┌───「 <b>🛡️️ {BRAND} ADMIN CENTRAL</b> 」───\n"
                 f"│ Central Command Terminal Active.\n"
                 f"│ Choose an administration module to configure:\n"
                 f"└────────────────────────────────────────"
@@ -2377,7 +2380,6 @@ async def health_check_server():
 # ============================================================
 
 async def post_init(application: Application):
-    # Start web server for Render health checks
     asyncio.create_task(health_check_server())
 
     commands = [
@@ -2420,9 +2422,9 @@ def main():
 
     init_db()
 
-    # Resilient connection pool
+    # Resilient connection pool built for extreme concurrent requests
     t_request = HTTPXRequest(
-        connection_pool_size=50,
+        connection_pool_size=60,
         connect_timeout=6.0,
         read_timeout=12.0,
         write_timeout=12.0,
@@ -2488,7 +2490,7 @@ def main():
         "=====================================================\n"
         "🚀 Terminal Online: Obsidian Trace Core Activated\n"
         "🛡 Strict Input Sanitization & Target Shielding: Active\n"
-        "⚡ Resilient 50-Socket Pool & Semaphore Control: Enabled\n"
+        "⚡ Resilient 60-Socket Pool & Semaphore Control: Enabled\n"
         "🛰 Background Surveillance Audit Dispatcher: Connected\n"
         "🌐 Render Web Service HTTP Port Binding: Armed\n"
         "📊 Live Telemetry & Inspector Tools: Integrated\n"
