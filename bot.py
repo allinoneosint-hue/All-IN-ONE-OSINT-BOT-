@@ -947,6 +947,7 @@ SENSITIVE_REPLACEMENTS = [
     "@RAJFFLIVEBOT",
     "@rajfflivebot",
     "@rajfflive",
+    "@BackemdHub",
 ]
 
 def sanitize_response(text: str) -> str:
