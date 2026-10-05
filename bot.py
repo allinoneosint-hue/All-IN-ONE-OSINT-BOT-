@@ -18,7 +18,7 @@ from telegram import (
     Update,
 )
 from telegram.constants import ParseMode
-from telegram.error import BadRequest, NetworkError
+from telegram.error import BadRequest, NetworkError, Conflict
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
@@ -752,7 +752,7 @@ def format_status_card(row, user) -> str:
         plan_expiry = exp.strftime("%d %b %Y, %H:%M UTC") if exp else "Unknown"
 
     text = (
-        f"┌───「 <b>🛡️️ {BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
         f"│ 👤 <b>Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>ID:</b> <code>{user.id}</code>\n"
         f"│ 🚫 <b>Banned:</b> {'YES ❌' if row['is_banned'] else 'NO 🟢'}\n"
@@ -946,7 +946,7 @@ def consume_search(user_id: int, is_private: bool):
         conn.close()
 
 # ============================================================
-# RESPONSE SANITIZATION & BRAND REPLACEMENTS
+# RESPONSE SANITIZATION & DEEP 'NOT FOUND' EVALUATOR
 # ============================================================
 
 REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5BOT"
@@ -981,6 +981,18 @@ def is_empty_payload(data) -> bool:
     if isinstance(data, str):
         cleaned = data.strip().lower()
         if cleaned in ("", "null", "none", "{}", "[]", "not found", "no data found", "record not found", "error"):
+            return True
+    # Deep JSON Inspection (Catches found: false, count: 0, result: [])
+    if isinstance(data, dict):
+        if data.get("found") is False:
+            return True
+        if data.get("count") == 0:
+            return True
+        if "result" in data and is_empty_payload(data.get("result")):
+            return True
+        if "data" in data and is_empty_payload(data.get("data")):
+            return True
+        if data.get("status") in (False, "failed", "error"):
             return True
     return False
 
@@ -1101,7 +1113,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
 def default_welcome_text(user) -> str:
     admin_tag = "👑 <b>Admin Status:</b> Unlimited Credits Active\n" if is_admin(user.id) else ""
     return (
-        f"┌───「 <b>🛡️️ {BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡 {BRAND}</b> 」───\n"
         f"│ 👋 <b>Greetings Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>Client ID:</b> <code>{user.id}</code>\n"
         f"│ {admin_tag}"
@@ -1482,7 +1494,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     text = (
-        f"┌───「 <b>🛡️️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+        f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
         f"│ Welcome to the Central Command Terminal.\n"
         f"│ Choose an administration module to configure:\n"
         f"└────────────────────────────────────────"
@@ -1683,7 +1695,7 @@ async def show_admin_groups(query, page: int):
     buttons = []
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("⬅️️ Prev", callback_data=f"adm_groups_{page - 1}"))
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"adm_groups_{page - 1}"))
     if offset + USERS_PER_PAGE < total:
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"adm_groups_{page + 1}"))
     if nav:
@@ -1843,7 +1855,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unlock_text = (
                 f"┌───「 <b>🎉 ACCESS GRANTED</b> 」───\n"
                 f"│ Operative <b>{html.escape(user.first_name)}</b> has verified both channels!\n"
-                f"│ All system protocols are now fully /start operational.\n"
+                f"│ All system protocols are now fullyto to /start  operational.\n"
                 f"└──────────────────────────────"
             )
 
@@ -2433,6 +2445,10 @@ async def post_shutdown(application: Application):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, NetworkError):
         logger.warning("Network fluctuation caught & suppressed: %s", context.error)
+        return
+    if isinstance(context.error, Conflict):
+        logger.warning("Bot instance conflict detected. Resolving and waiting for other instance to stop...")
+        await asyncio.sleep(2)
         return
     logger.exception("Update handler encountered error:", exc_info=context.error)
 
