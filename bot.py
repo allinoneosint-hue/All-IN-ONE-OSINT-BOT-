@@ -39,7 +39,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID_1 = int(os.getenv("ADMIN_ID_1", "0"))
 ADMIN_ID_2 = int(os.getenv("ADMIN_ID_2", "0"))
 
-# Private Surveillance / Storage Log Channel ID (e.g. -1001234567890)
+# Private Surveillance / Storage Log Channel ID
 AUDIT_LOG_CHANNEL_ID = int(os.getenv("AUDIT_LOG_CHANNEL_ID", "0"))
 
 BRAND = "OBSIDIAN TRACE"
@@ -84,7 +84,7 @@ ADMIN_STATE = {}
 # EXTERNAL APIS CONFIG
 # ============================================================
 
-NUMBER_API_URL = "https://rajfflivebot.onrender.com/pub/rajfflive/api"
+NUMBER_API_URL = "https://reuters-memorabilia-insulin-disclose.trycloudflare.com/num"
 NUMBER_API_KEY = os.getenv("NUMBER_API_KEY", "")
 
 VEHICLE_API_URL = "http://rajfflivebot.onrender.com/pub/rajfflive/vnum"
@@ -100,6 +100,15 @@ TRUECALLER_API_URL = "https://rack-72au.onrender.com/truecaller"
 PINCODE_API_URL = "https://rack-pincodeapi.vercel.app/api"
 IFSC_API_URL = "https://vercei-kappa.vercel.app/ifsc"
 IP_API_URL = "https://ip-dwy8.onrender.com/api/rackipapi"
+WEATHER_API_BASE_URL = "https://rack-weather.vercel.app/api/weather"
+
+# Real Browser Spoof Headers (Cloudflare Protection Bypass)
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+}
 
 # ============================================================
 # LOGGING SETUP
@@ -133,7 +142,7 @@ def parse_iso(value: Optional[str]) -> Optional[datetime]:
         return None
 
 # ============================================================
-# DATABASE INITIALIZATION & OPTIMIZATION FOR HEAVY TRAFFIC
+# DATABASE INITIALIZATION & MIGRATIONS
 # ============================================================
 
 def db_connection() -> sqlite3.Connection:
@@ -247,7 +256,7 @@ def init_db():
             "welcome_text": "",
             "welcome_media_id": "",
             "welcome_media_type": "",
-            "api_query": "1",
+            "api_num": "1",
             "api_vehicle": "1",
             "api_adh": "1",
             "api_tg": "1",
@@ -256,6 +265,7 @@ def init_db():
             "api_pin": "1",
             "api_ifsc": "1",
             "api_ip": "1",
+            "api_weather": "1",
         }
 
         for key, value in defaults.items():
@@ -742,7 +752,7 @@ def format_status_card(row, user) -> str:
         plan_expiry = exp.strftime("%d %b %Y, %H:%M UTC") if exp else "Unknown"
 
     text = (
-        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡️️ {BRAND}</b> 」───\n"
         f"│ 👤 <b>Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>ID:</b> <code>{user.id}</code>\n"
         f"│ 🚫 <b>Banned:</b> {'YES ❌' if row['is_banned'] else 'NO 🟢'}\n"
@@ -936,12 +946,17 @@ def consume_search(user_id: int, is_private: bool):
         conn.close()
 
 # ============================================================
-# RESPONSE SANITIZATION & NOT FOUND EVALUATOR
+# RESPONSE SANITIZATION & BRAND REPLACEMENTS
 # ============================================================
 
 REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5BOT"
 SENSITIVE_REPLACEMENTS = [
     "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5",
+    "@BackemdHub",
+    "CREDIT / INFO Owner: @shiva_158 Free API: @Osintinfooobot Free API ke liye Channel Join karein: https://t.me/osintinfoooo For Any Kind of API: @shiva_158",
+    "@Osintinfooobot",
+    "https://t.me/osintinfoooo",
+    "@shiva_158",
     "@YeuIin",
     "@kihoerack",
     "@RAJFFLIVE",
@@ -949,7 +964,6 @@ SENSITIVE_REPLACEMENTS = [
     "@RAJFFLIVEBOT",
     "@rajfflivebot",
     "@rajfflive",
-    "@BackemdHub",
 ]
 
 def sanitize_response(text: str) -> str:
@@ -994,11 +1008,11 @@ async def send_result(update: Update, result: str):
             pass
 
     chunks = []
-    start = 0
-    while start < len(result):
-        end = min(start + 3500, len(result))
-        chunks.append(result[start:end])
-        start = end
+    start_pos = 0
+    while start_pos < len(result):
+        end_pos = min(start_pos + 3500, len(result))
+        chunks.append(result[start_pos:end_pos])
+        start_pos = end_pos
     for idx, c in enumerate(chunks, 1):
         await update.message.reply_text(
             f"<b>[PART {idx}/{len(chunks)}]</b>\n<pre>{html.escape(c)}</pre>",
@@ -1007,7 +1021,7 @@ async def send_result(update: Update, result: str):
         )
 
 # ============================================================
-# BULLETPROOF ASYNC API DISPATCHER (NO UGLY 404 OR TIMEOUT ERRORS)
+# BULLETPROOF ASYNC API DISPATCHER
 # ============================================================
 
 async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
@@ -1030,13 +1044,12 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
             if HTTP_CLIENT is None or HTTP_CLIENT.is_closed:
                 HTTP_CLIENT = httpx.AsyncClient(
                     timeout=REQUEST_TIMEOUT,
-                    headers={"User-Agent": "OBSIDIAN-TRACE-NODE/4.0"},
+                    headers=BROWSER_HEADERS,
                     follow_redirects=True,
                 )
 
             resp = await HTTP_CLIENT.get(url, params=params)
 
-            # Agar 404, 400, 502, 503 ya koi bhi non-200 code aaye -> seedha NOT FOUND[span_2](start_span)[span_2](end_span)
             if resp.status_code in (404, 400, 422, 500, 502, 503):
                 formatted_output = "NOT FOUND"
                 log_status = f"HTTP_{resp.status_code}"
@@ -1046,13 +1059,11 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 if formatted_output == "NOT FOUND":
                     log_status = "NOT FOUND"
 
-            # Agar NOT FOUND nahi hai tabhi quota consume karo taaki user ka balance bache
             if user and not is_admin(user.id) and formatted_output != "NOT FOUND":
                 is_p = (chat.type == "private") if chat else True
                 consume_search(user.id, is_p)
 
         except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException):
-            # Upstream timeout ya network issue par raw code error dikhane ke bajaye clean NOT FOUND send hoga[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)
             formatted_output = "NOT FOUND"
             log_status = "UPSTREAM_TIMEOUT_OR_FAULT"
         except Exception as exc:
@@ -1066,7 +1077,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 except Exception:
                     pass
 
-    # Real-time surveillance storage log dispatch
+    # Real-time background surveillance log dispatch
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
@@ -1090,7 +1101,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
 def default_welcome_text(user) -> str:
     admin_tag = "👑 <b>Admin Status:</b> Unlimited Credits Active\n" if is_admin(user.id) else ""
     return (
-        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡️️ {BRAND}</b> 」───\n"
         f"│ 👋 <b>Greetings Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>Client ID:</b> <code>{user.id}</code>\n"
         f"│ {admin_tag}"
@@ -1099,7 +1110,7 @@ def default_welcome_text(user) -> str:
         f"│ 👥 <b>Any Group:</b>   4 Searches / Day\n"
         f"├───「 <b>🔥 ALL PROTOCOLS &amp; COMMANDS</b> 」───\n"
         f"│ 1. <code>/start</code> - Restart terminal\n"
-        f"│ 2. <code>/query &lt;val&gt;</code> - Mobile Intel (10-Digit only)\n"
+        f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (10-Digit only)\n"
         f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle RC Lookup\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
         f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile\n"
@@ -1108,9 +1119,10 @@ def default_welcome_text(user) -> str:
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
         f"│ 9. <code>/ifsc &lt;code&gt;</code> - Bank Branch Lookup\n"
         f"│ 10. <code>/ip &lt;ip&gt;</code> - IP Geolocation Intel\n"
-        f"│ 11. <code>/ref</code> - Recruitment Referral Link\n"
-        f"│ 12. <code>/status</code> - Real-time Limits &amp; Quota\n"
-        f"│ 13. <code>/help</code> - Full Documentation\n"
+        f"│ 11. <code>/weather &lt;city&gt;</code> - Realtime Weather Intel\n"
+        f"│ 12. <code>/ref</code> - Recruitment Referral Link\n"
+        f"│ 13. <code>/status</code> - Real-time Limits &amp; Quota\n"
+        f"│ 14. <code>/help</code> - Full Documentation\n"
         f"└───「 <b>👑 SUPPORT &amp; CREDITS</b> 」───\n"
         f"│ ⚡ Contact Owners: {OWNER_CONTACTS}\n"
         f"└──────────────────────────────\n\n"
@@ -1240,9 +1252,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     text = (
-        f"┌───「 <b>📚 COMMAND DIRECTORY (ALL 13)</b> 」───\n"
+        f"┌───「 <b>📚 COMMAND DIRECTORY (ALL 14)</b> 」───\n"
         f"│ 1. <code>/start</code> - Restart terminal\n"
-        f"│ 2. <code>/query &lt;val&gt;</code> - Mobile Search (Strict 10-Digit)\n"
+        f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (Strict 10-Digit)\n"
         f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle Registration Search\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
         f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Numeric)\n"
@@ -1251,9 +1263,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
         f"│ 9. <code>/ifsc &lt;code&gt;</code> - Bank Branch Lookup\n"
         f"│ 10. <code>/ip &lt;ip&gt;</code> - IP Geolocation Intel\n"
-        f"│ 11. <code>/ref</code> - Recruitment Link\n"
-        f"│ 12. <code>/status</code> - Live Account Balance\n"
-        f"│ 13. <code>/help</code> - Documentation\n"
+        f"│ 11. <code>/weather &lt;city&gt;</code> - Live Weather Intel\n"
+        f"│ 12. <code>/ref</code> - Recruitment Link\n"
+        f"│ 13. <code>/status</code> - Live Account Balance\n"
+        f"│ 14. <code>/help</code> - Documentation\n"
         f"├───「 <b>👑 UPGRADE ACCESS</b> 」───\n"
         f"│ Contact Owners: {OWNER_CONTACTS}\n"
         f"└──────────────────────────────"
@@ -1264,11 +1277,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SEARCH COMMANDS (VALIDATION & SHIELDED IDENTIFIERS)
 # ============================================================
 
-async def query_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not await check_search_access(update, context, "query"):
+async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not await check_search_access(update, context, "num"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/query &lt;10_digit_number&gt;</code>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("<b>Syntax:</b> <code>/num &lt;10_digit_number&gt;</code>", parse_mode=ParseMode.HTML)
         return
 
     val = context.args[0].strip()
@@ -1276,8 +1289,8 @@ async def query_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not re.fullmatch(r"\d{10}", val):
         await update.message.reply_text(
             "┌───「 <b>❌ INVALID NUMBER FORMAT</b> 」───\n"
-            "│ The <code>/query</code> protocol only accepts an exact <b>10-digit</b> mobile number.\n"
-            "│ <i>Example:</i> <code>/query 9876543210</code>\n"
+            "│ The <code>/num</code> protocol only accepts an exact <b>10-digit</b> mobile number.\n"
+            "│ <i>Example:</i> <code>/num 9876543210</code>\n"
             "└────────────────────────────────────────",
             parse_mode=ParseMode.HTML,
         )
@@ -1292,7 +1305,7 @@ async def query_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await execute_api_search(update, context, NUMBER_API_URL, {"num": val, "key": NUMBER_API_KEY}, "query", val)
+    await execute_api_search(update, context, NUMBER_API_URL, {"number": val, "key": NUMBER_API_KEY}, "num", val)
 
 async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "vehicle"):
@@ -1398,6 +1411,16 @@ async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ip_val = " ".join(context.args).strip()
     await execute_api_search(update, context, IP_API_URL, {"ip": ip_val}, "ip", ip_val)
 
+async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not await check_search_access(update, context, "weather"):
+        return
+    if not context.args:
+        await update.message.reply_text("<b>Syntax:</b> <code>/weather &lt;city_or_state&gt;</code>\n<i>Example: /weather delhi</i>", parse_mode=ParseMode.HTML)
+        return
+    location = " ".join(context.args).strip()
+    target_url = f"{WEATHER_API_BASE_URL}/{location}"
+    await execute_api_search(update, context, target_url, {}, "weather", location)
+
 # ============================================================
 # SAFE MESSAGE EDIT HELPER
 # ============================================================
@@ -1417,7 +1440,7 @@ async def safe_edit_text(query, text: str, reply_markup: Optional[InlineKeyboard
         logger.exception("safe_edit_text exception: %s", e)
 
 # ============================================================
-# ADMIN INTERFACE DASHBOARD (GRID DESIGN WITH STATUS BUTTON)
+# ADMIN INTERFACE DASHBOARD (GRID DESIGN)
 # ============================================================
 
 def admin_dashboard_keyboard():
@@ -1459,7 +1482,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     text = (
-        f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+        f"┌───「 <b>🛡️️ {BRAND} ADMIN CENTRAL</b> 」───\n"
         f"│ Welcome to the Central Command Terminal.\n"
         f"│ Choose an administration module to configure:\n"
         f"└────────────────────────────────────────"
@@ -1467,7 +1490,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=admin_dashboard_keyboard(), parse_mode=ParseMode.HTML)
 
 # ============================================================
-# ADMIN SUBMENUS (INCLUDING FULL TERMINAL STATUS CARD)
+# ADMIN SUBMENUS (ALL STATUS, APIS & CONTROLS)
 # ============================================================
 
 USERS_PER_PAGE = 8
@@ -1494,7 +1517,7 @@ async def show_all_status(query):
     audit_ch = get_audit_channel()
     ch_status = f"<code>{audit_ch}</code>" if audit_ch != 0 else "🔴 Not Configured"
 
-    apis = ["query", "vehicle", "adh", "tg", "gm", "tc", "pin", "ifsc", "ip"]
+    apis = ["num", "vehicle", "adh", "tg", "gm", "tc", "pin", "ifsc", "ip", "weather"]
     api_stat_str = " ".join([f"/{a}:{'🟢' if api_is_active(a) else '🔴'}" for a in apis])
 
     text = (
@@ -1510,7 +1533,7 @@ async def show_all_status(query):
         f"│ • Total Group Hubs: <code>{total_groups}</code>\n"
         f"│ • Operations in Groups: <code>{group_searches}</code>\n"
         f"│ • Lifetime Operations: <code>{total_searches}</code>\n"
-        f"├───「 <b>⚙️️ LIVE POLICIES</b> 」───\n"
+        f"├───「 <b>⚙️ LIVE POLICIES</b> 」───\n"
         f"│ • DM Daily Limit: <code>{p_lim}</code> Searches\n"
         f"│ • Group Daily Limit: <code>{g_lim}</code> Searches\n"
         f"│ • Anti-Spam Freeze: <code>{frz_t}</code> Minutes\n"
@@ -1660,7 +1683,7 @@ async def show_admin_groups(query, page: int):
     buttons = []
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"adm_groups_{page - 1}"))
+        nav.append(InlineKeyboardButton("⬅️️ Prev", callback_data=f"adm_groups_{page - 1}"))
     if offset + USERS_PER_PAGE < total:
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"adm_groups_{page + 1}"))
     if nav:
@@ -1670,13 +1693,13 @@ async def show_admin_groups(query, page: int):
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_admin_apis(query):
-    api_list = ["query", "vehicle", "adh", "tg", "gm", "tc", "pin", "ifsc", "ip"]
+    api_list = ["num", "vehicle", "adh", "tg", "gm", "tc", "pin", "ifsc", "ip", "weather"]
     buttons = []
     row = []
     for item in api_list:
         status = "🟢" if api_is_active(item) else "🔴"
         row.append(InlineKeyboardButton(f"{status} /{item}", callback_data=f"adm_tglapi_{item}"))
-        if len(row) == 3:
+        if len(row) == 2:
             buttons.append(row)
             row = []
     if row:
@@ -1780,7 +1803,7 @@ async def show_admin_settings(query):
         f"│ 💬 <b>Global Private Limit:</b> <code>{p_lim}</code> Searches\n"
         f"│ 👥 <b>Global Group Limit:</b>   <code>{g_lim}</code> Searches\n"
         f"│ 🎁 <b>Referral Bonus:</b>      <code>{ref_b}</code> Credit / Invite\n"
-        f"│ ❄️️ <b>Anti-Spam Freeze:</b>    <code>{freeze_t}</code> Minutes\n"
+        f"│ ❄️ <b>Anti-Spam Freeze:</b>    <code>{freeze_t}</code> Minutes\n"
         f"│ 🛰 <b>Surveillance Channel:</b> <code>{audit_ch if audit_ch != 0 else 'Not Set'}</code>\n"
         f"├───「 <b>MANAGEMENT PROTOCOLS</b> 」───\n"
         f"│ • <code>/info &lt;user_id&gt;</code> (Inspect User)\n"
@@ -1820,7 +1843,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unlock_text = (
                 f"┌───「 <b>🎉 ACCESS GRANTED</b> 」───\n"
                 f"│ Operative <b>{html.escape(user.first_name)}</b> has verified both channels!\n"
-                f"│ All system protocols are now /help fully operational.\n"
+                f"│ All system protocols are now fully /start operational.\n"
                 f"└──────────────────────────────"
             )
 
@@ -1854,7 +1877,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "adm_home":
             ADMIN_STATE.pop(user.id, None)
             text = (
-                f"┌───「 <b>🛡️️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+                f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
                 f"│ Central Command Terminal Active.\n"
                 f"│ Choose an administration module to configure:\n"
                 f"└────────────────────────────────────────"
@@ -2384,7 +2407,7 @@ async def post_init(application: Application):
 
     commands = [
         BotCommand("start", "Initialize / Wake terminal"),
-        BotCommand("query", "Mobile search (10-digit only)"),
+        BotCommand("num", "Mobile search (10-digit only)"),
         BotCommand("vehicle", "Vehicle registration RC search"),
         BotCommand("adh", "Identification record lookup"),
         BotCommand("tg", "Telegram User ID to mobile"),
@@ -2393,6 +2416,7 @@ async def post_init(application: Application):
         BotCommand("pin", "Postal PIN code directory"),
         BotCommand("ifsc", "Bank branch IFSC directory"),
         BotCommand("ip", "IP Geolocation lookup"),
+        BotCommand("weather", "Weather intelligence lookup"),
         BotCommand("ref", "Recruitment referral link"),
         BotCommand("status", "View operational limits"),
         BotCommand("help", "Command documentation"),
@@ -2422,7 +2446,6 @@ def main():
 
     init_db()
 
-    # Resilient connection pool built for extreme concurrent requests
     t_request = HTTPXRequest(
         connection_pool_size=60,
         connect_timeout=6.0,
@@ -2447,7 +2470,8 @@ def main():
     app.add_handler(CommandHandler("status", status_command))
 
     # Intel Query Handlers
-    app.add_handler(CommandHandler("query", query_command))
+    app.add_handler(CommandHandler("num", num_command))
+    app.add_handler(CommandHandler("query", num_command))  # Backward-compatibility alias
     app.add_handler(CommandHandler("vehicle", vehicle_command))
     app.add_handler(CommandHandler("adh", adhar_command))
     app.add_handler(CommandHandler("tg", tg_command))
@@ -2456,6 +2480,7 @@ def main():
     app.add_handler(CommandHandler("pin", pin_command))
     app.add_handler(CommandHandler("ifsc", ifsc_command))
     app.add_handler(CommandHandler("ip", ip_command))
+    app.add_handler(CommandHandler("weather", weather_command))
 
     # Admin Management Command Handlers
     app.add_handler(CommandHandler("admin", admin_command))
@@ -2493,6 +2518,7 @@ def main():
         "⚡ Resilient 60-Socket Pool & Semaphore Control: Enabled\n"
         "🛰 Background Surveillance Audit Dispatcher: Connected\n"
         "🌐 Render Web Service HTTP Port Binding: Armed\n"
+        "🌦 Weather Intelligence Engine (/weather): Connected\n"
         "📊 Live Telemetry & Inspector Tools: Integrated\n"
         "👑 Admin Unlimited Quota & Custom Limits: Armed\n"
         "=====================================================\n"
