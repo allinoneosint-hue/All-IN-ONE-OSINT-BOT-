@@ -16,6 +16,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    MenuButtonCommands,
 )
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, NetworkError, Conflict
@@ -2597,7 +2598,10 @@ async def post_init(application: Application):
         BotCommand("help", "Command documentation"),
     ]
     await application.bot.set_my_commands(commands)
-    logger.info("Menu commands published successfully.")
+    # Yeh line niche wala Menu button permanently force karegi:
+    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    logger.info("Menu commands & Chat Menu Button published successfully.")
+
 
 async def post_shutdown(application: Application):
     global HTTP_CLIENT
