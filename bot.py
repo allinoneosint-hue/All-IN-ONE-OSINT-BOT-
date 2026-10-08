@@ -970,9 +970,6 @@ SENSITIVE_REPLACEMENTS = [
     "@RAJFFLIVEBOT",
     "@rajfflivebot",
     "@rajfflive",
-    "used": 570",
-    ""limit: 9999999999",
-    "24h",
     
    
     
