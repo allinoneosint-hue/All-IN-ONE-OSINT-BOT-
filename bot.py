@@ -50,7 +50,7 @@ MAX_MESSAGE_LENGTH = 3900
 # Default free daily limits
 DEFAULT_PRIVATE_LIMIT = int(os.getenv("DEFAULT_PRIVATE_LIMIT", "3"))
 DEFAULT_GROUP_LIMIT = int(os.getenv("DEFAULT_GROUP_LIMIT", "4"))
-DEFAULT_REFERRAL_BONUS = 1
+DEFAULT_REFERRAL_BONUS = 2
 DEFAULT_FREEZE_MINUTES = 5
 
 # Owner Contact Info
@@ -81,7 +81,7 @@ USER_FREEZE_MAP = {}
 ADMIN_STATE = {}
 
 # ============================================================
-# EXTERNAL APIS CONFIG
+# EXTERNAL APIS CONFIG (PRIMARY & FAILOVER BACKUPS)
 # ============================================================
 
 NUMBER_API_URL = "https://reuters-memorabilia-insulin-disclose.trycloudflare.com/num"
@@ -93,9 +93,14 @@ VEHICLE_API_KEY = os.getenv("VEHICLE_API_KEY", "")
 ADHAR_API_URL = "http://rajfflivebot.onrender.com/pub/rajfflive/adhar"
 ADHAR_API_KEY = os.getenv("ADHAR_API_KEY", "")
 
-TG_TO_NUM_API_URL = "https://tg-to-num.backemdhub.workers.dev/"
+# TG Primary & Failover Backup
+TG_TO_NUM_PRIMARY = "https://tg-to-num.backemdhub.workers.dev/"
+TG_TO_NUM_BACKUP = "https://ftosint.world/api/tg?key=ravixnobita&info="
 
-GMAIL_API_URL = "https://rack-72au.onrender.com/gmail-info"
+# Gmail Primary & Failover Backup
+GMAIL_PRIMARY = "https://rack-72au.onrender.com/gmail-info"
+GMAIL_BACKUP = "https://ftosint.world/api/email?key=ravixnobita&email="
+
 TRUECALLER_API_URL = "https://rack-72au.onrender.com/truecaller"
 PINCODE_API_URL = "https://rack-pincodeapi.vercel.app/api"
 IFSC_API_URL = "https://vercei-kappa.vercel.app/ifsc"
@@ -946,7 +951,7 @@ def consume_search(user_id: int, is_private: bool):
         conn.close()
 
 # ============================================================
-# RESPONSE SANITIZATION & DEEP 'NOT FOUND' EVALUATOR
+# RESPONSE SANITIZATION & BRAND REPLACEMENTS
 # ============================================================
 
 REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5BOT"
@@ -959,6 +964,7 @@ SENSITIVE_REPLACEMENTS = [
     "@shiva_158",
     "@YeuIin",
     "@kihoerack",
+    "@ftgamer2",
     "@RAJFFLIVE",
     "https://t.me/+QUg-JvyJizkxMzA1",
     "@RAJFFLIVEBOT",
@@ -982,7 +988,7 @@ def is_empty_payload(data) -> bool:
         cleaned = data.strip().lower()
         if cleaned in ("", "null", "none", "{}", "[]", "not found", "no data found", "record not found", "error"):
             return True
-    # Deep JSON Inspection (Catches found: false, count: 0, result: [])
+    # Deep JSON Evaluation
     if isinstance(data, dict):
         if data.get("found") is False:
             return True
@@ -1033,11 +1039,40 @@ async def send_result(update: Update, result: str):
         )
 
 # ============================================================
-# BULLETPROOF ASYNC API DISPATCHER
+# ASYNC HTTP DISPATCHER WITH AUTO-FAILOVER HELPER
 # ============================================================
 
-async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
+async def fetch_endpoint(url: str, params: dict) -> tuple[Optional[str], Optional[dict], str]:
     global HTTP_CLIENT
+    async with SEMAPHORE:
+        try:
+            if HTTP_CLIENT is None or HTTP_CLIENT.is_closed:
+                HTTP_CLIENT = httpx.AsyncClient(
+                    timeout=REQUEST_TIMEOUT,
+                    headers=BROWSER_HEADERS,
+                    follow_redirects=True,
+                )
+            resp = await HTTP_CLIENT.get(url, params=params)
+            if resp.status_code in (404, 400, 422, 500, 502, 503):
+                return None, None, f"HTTP_{resp.status_code}"
+            resp.raise_for_status()
+            raw = resp.text.strip()
+            if not raw or is_empty_payload(raw):
+                return None, None, "EMPTY"
+            try:
+                parsed = json.loads(raw)
+                if is_empty_payload(parsed):
+                    return None, None, "EMPTY_JSON"
+                return raw, parsed, "SUCCESS"
+            except Exception:
+                return raw, None, "RAW_SUCCESS"
+        except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException):
+            return None, None, "TIMEOUT_OR_FAULT"
+        except Exception as exc:
+            logger.exception("Fetch error on %s: %s", url, exc)
+            return None, None, "FAULT"
+
+async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
     user = update.effective_user
     chat = update.effective_chat
     searching_msg = None
@@ -1048,48 +1083,25 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
         except Exception:
             pass
 
-    log_status = "SUCCESS"
+    raw_text, _, status = await fetch_endpoint(url, params)
     formatted_output = "NOT FOUND"
+    log_status = status
 
-    async with SEMAPHORE:
+    if raw_text:
+        formatted_output = format_json_response(raw_text)
+        if formatted_output != "NOT FOUND":
+            log_status = "SUCCESS"
+            if user and not is_admin(user.id):
+                consume_search(user.id, (chat.type == "private") if chat else True)
+        else:
+            log_status = "NOT FOUND"
+
+    if searching_msg:
         try:
-            if HTTP_CLIENT is None or HTTP_CLIENT.is_closed:
-                HTTP_CLIENT = httpx.AsyncClient(
-                    timeout=REQUEST_TIMEOUT,
-                    headers=BROWSER_HEADERS,
-                    follow_redirects=True,
-                )
+            await searching_msg.delete()
+        except Exception:
+            pass
 
-            resp = await HTTP_CLIENT.get(url, params=params)
-
-            if resp.status_code in (404, 400, 422, 500, 502, 503):
-                formatted_output = "NOT FOUND"
-                log_status = f"HTTP_{resp.status_code}"
-            else:
-                resp.raise_for_status()
-                formatted_output = format_json_response(resp.text)
-                if formatted_output == "NOT FOUND":
-                    log_status = "NOT FOUND"
-
-            if user and not is_admin(user.id) and formatted_output != "NOT FOUND":
-                is_p = (chat.type == "private") if chat else True
-                consume_search(user.id, is_p)
-
-        except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException):
-            formatted_output = "NOT FOUND"
-            log_status = "UPSTREAM_TIMEOUT_OR_FAULT"
-        except Exception as exc:
-            logger.exception("Search execution fault: %s", exc)
-            formatted_output = "NOT FOUND"
-            log_status = "FAULT"
-        finally:
-            if searching_msg:
-                try:
-                    await searching_msg.delete()
-                except Exception:
-                    pass
-
-    # Real-time background surveillance log dispatch
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
@@ -1113,7 +1125,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
 def default_welcome_text(user) -> str:
     admin_tag = "👑 <b>Admin Status:</b> Unlimited Credits Active\n" if is_admin(user.id) else ""
     return (
-        f"┌───「 <b>🛡 {BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
         f"│ 👋 <b>Greetings Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>Client ID:</b> <code>{user.id}</code>\n"
         f"│ {admin_tag}"
@@ -1125,8 +1137,8 @@ def default_welcome_text(user) -> str:
         f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (10-Digit only)\n"
         f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle RC Lookup\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
-        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile\n"
-        f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Account Lookup\n"
+        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Auto-Num Intel)\n"
+        f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Account Lookup (Dual Node)\n"
         f"│ 7. <code>/tc &lt;val&gt;</code> - Truecaller Intelligence\n"
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
         f"│ 9. <code>/ifsc &lt;code&gt;</code> - Bank Branch Lookup\n"
@@ -1233,7 +1245,7 @@ async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     card = (
         f"┌───「 <b>👥 ALLIED RECRUITMENT</b> 」───\n"
-        f"│ Share your unique transmission code with peers.\n"
+        f"│ Share your unique transmission link with others.\n"
         f"│ Each successful recruit provides <b>+{bonus} Extra Search Credit(s)</b>!\n"
         f"├───「 <b>TRANSMISSION LINK</b> 」───\n"
         f"│ 🔗 <b>Your Link:</b>\n"
@@ -1269,8 +1281,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (Strict 10-Digit)\n"
         f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle Registration Search\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
-        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Numeric)\n"
-        f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Account Intelligence\n"
+        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Auto-Num Intel)\n"
+        f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Intelligence (Dual Node)\n"
         f"│ 7. <code>/tc &lt;val&gt;</code> - Truecaller Intelligence\n"
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
         f"│ 9. <code>/ifsc &lt;code&gt;</code> - Bank Branch Lookup\n"
@@ -1286,7 +1298,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ============================================================
-# SEARCH COMMANDS (VALIDATION & SHIELDED IDENTIFIERS)
+# SEARCH COMMANDS (VALIDATION, FAILOVERS & AUTO-CHAINING)
 # ============================================================
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1337,6 +1349,9 @@ async def adhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = " ".join(context.args).strip()
     await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val)
 
+# ------------------------------------------------------------
+# DUAL FAILOVER & AUTO-CHAINING TELEGRAM COMMAND (/tg ➔ /num)
+# ------------------------------------------------------------
 async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "tg"):
         return
@@ -1370,8 +1385,84 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await execute_api_search(update, context, TG_TO_NUM_API_URL, {"tg": val}, "tg", val)
+    user = update.effective_user
+    chat = update.effective_chat
+    searching_msg = None
 
+    if update.message:
+        try:
+            searching_msg = await update.message.reply_text("⚡ <code>Querying Telegram Decentralized Hub &amp; Chaining Nodes... ⏳</code>", parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+    # Step 1: Hit Primary Endpoint
+    raw_text, parsed_data, status = await fetch_endpoint(TG_TO_NUM_PRIMARY, {"tg": val})
+    resolved_via = "PRIMARY"
+
+    # Step 2: Fallback to Backup Endpoint on failure/empty
+    if not raw_text or is_empty_payload(parsed_data or raw_text):
+        backup_url = f"{TG_TO_NUM_BACKUP}{val}"
+        raw_text, parsed_data, status = await fetch_endpoint(backup_url, {})
+        resolved_via = "BACKUP_FAILOVER"
+
+    extracted_number = None
+    final_output = "NOT FOUND"
+    log_status = status
+
+    if raw_text and not is_empty_payload(parsed_data or raw_text):
+        # Extract mobile number if present in JSON payload
+        if isinstance(parsed_data, dict):
+            for k in ("mobile", "number", "phone", "phone_number"):
+                if parsed_data.get(k):
+                    c_num = re.sub(r"\D", "", str(parsed_data[k]))
+                    if len(c_num) >= 10:
+                        extracted_number = c_num[-10:]
+                        break
+
+        # Step 3: Auto-Pivot Chaining to /num API if number extracted
+        num_raw = None
+        if extracted_number:
+            num_raw, num_parsed, _ = await fetch_endpoint(NUMBER_API_URL, {"number": extracted_number, "key": NUMBER_API_KEY})
+
+        # Step 4: Consolidate Output Report
+        composite_report = {}
+        composite_report["telegram_profile"] = parsed_data if parsed_data else raw_text
+        if num_raw and not is_empty_payload(num_parsed or num_raw):
+            composite_report["linked_mobile_intel"] = num_parsed if num_parsed else num_raw
+
+        cleaned_json = sanitize_response(json.dumps(composite_report, indent=2, ensure_ascii=False))
+        final_output = cleaned_json
+        log_status = f"SUCCESS_{resolved_via}" + ("_CHAINED" if extracted_number else "")
+
+        if user and not is_admin(user.id):
+            consume_search(user.id, (chat.type == "private") if chat else True)
+
+    if searching_msg:
+        try:
+            await searching_msg.delete()
+        except Exception:
+            pass
+
+    if user:
+        c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
+        audit_msg = (
+            f"┌───「 <b>🛰️ SURVEILLANCE TELEMETRY</b> 」───\n"
+            f"│ 👤 <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
+            f"│ 🏷 <b>Handle:</b> @{html.escape(user.username or 'none')}\n"
+            f"│ ⚡ <b>Command:</b> <code>/tg</code> (Auto-Chain Engine)\n"
+            f"│ 🎯 <b>Target:</b> <code>{html.escape(val)}</code>\n"
+            f"│ 📱 <b>Extracted Phone:</b> <code>{extracted_number or 'None'}</code>\n"
+            f"│ 📍 <b>Origin:</b> {html.escape(c_title)}\n"
+            f"│ 📊 <b>Status:</b> <code>{log_status}</code>\n"
+            f"└────────────────────────────────────────"
+        )
+        dispatch_audit_log(context, audit_msg)
+
+    await send_result(update, final_output)
+
+# ------------------------------------------------------------
+# DUAL FAILOVER GMAIL COMMAND (/gm)
+# ------------------------------------------------------------
 async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "gm"):
         return
@@ -1382,7 +1473,57 @@ async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "@" not in email or "." not in email:
         await update.message.reply_text("❌ <b>Syntax Error:</b> Please provide a valid email format.", parse_mode=ParseMode.HTML)
         return
-    await execute_api_search(update, context, GMAIL_API_URL, {"q": email}, "gm", email)
+
+    user = update.effective_user
+    chat = update.effective_chat
+    searching_msg = None
+
+    if update.message:
+        try:
+            searching_msg = await update.message.reply_text("⚡ <code>Scanning Decentralized Email Registry... ⏳</code>", parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+    # Primary
+    raw_text, _, status = await fetch_endpoint(GMAIL_PRIMARY, {"q": email})
+    # Backup Fallback
+    if not raw_text or is_empty_payload(raw_text):
+        backup_url = f"{GMAIL_BACKUP}{email}"
+        raw_text, _, status = await fetch_endpoint(backup_url, {})
+
+    formatted_output = "NOT FOUND"
+    log_status = status
+
+    if raw_text:
+        formatted_output = format_json_response(raw_text)
+        if formatted_output != "NOT FOUND":
+            log_status = "SUCCESS"
+            if user and not is_admin(user.id):
+                consume_search(user.id, (chat.type == "private") if chat else True)
+        else:
+            log_status = "NOT FOUND"
+
+    if searching_msg:
+        try:
+            await searching_msg.delete()
+        except Exception:
+            pass
+
+    if user:
+        c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
+        audit_msg = (
+            f"┌───「 <b>🛰️ SURVEILLANCE TELEMETRY</b> 」───\n"
+            f"│ 👤 <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
+            f"│ 🏷 <b>Handle:</b> @{html.escape(user.username or 'none')}\n"
+            f"│ ⚡ <b>Command:</b> <code>/gm</code> (Dual Node)\n"
+            f"│ 🎯 <b>Target:</b> <code>{html.escape(email)}</code>\n"
+            f"│ 📍 <b>Origin:</b> {html.escape(c_title)}\n"
+            f"│ 📊 <b>Status:</b> <code>{log_status}</code>\n"
+            f"└────────────────────────────────────────"
+        )
+        dispatch_audit_log(context, audit_msg)
+
+    await send_result(update, formatted_output)
 
 async def truecaller_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "tc"):
@@ -1525,6 +1666,7 @@ async def show_all_status(query):
     fj_st = "🟢 ENFORCED" if force_join_active() else "🔴 BYPASSED"
     p_lim = get_private_limit()
     g_lim = get_group_limit()
+    ref_b = get_referral_bonus()
     frz_t = get_freeze_minutes()
     audit_ch = get_audit_channel()
     ch_status = f"<code>{audit_ch}</code>" if audit_ch != 0 else "🔴 Not Configured"
@@ -1548,6 +1690,7 @@ async def show_all_status(query):
         f"├───「 <b>⚙️ LIVE POLICIES</b> 」───\n"
         f"│ • DM Daily Limit: <code>{p_lim}</code> Searches\n"
         f"│ • Group Daily Limit: <code>{g_lim}</code> Searches\n"
+        f"│ • Referral Bonus: <code>{ref_b}</code> Credits/Invite\n"
         f"│ • Anti-Spam Freeze: <code>{frz_t}</code> Minutes\n"
         f"│ • Storage Channel: {ch_status}\n"
         f"├───「 <b>⚡ API GATEWAYS STATUS</b> 」───\n"
@@ -1819,6 +1962,7 @@ async def show_admin_settings(query):
         f"│ 🛰 <b>Surveillance Channel:</b> <code>{audit_ch if audit_ch != 0 else 'Not Set'}</code>\n"
         f"├───「 <b>MANAGEMENT PROTOCOLS</b> 」───\n"
         f"│ • <code>/info &lt;user_id&gt;</code> (Inspect User)\n"
+        f"│ • <code>/setreferral &lt;credits&gt;</code> (Set Referral Bonus)\n"
         f"│ • <code>/setprivate &lt;limit&gt;</code>\n"
         f"│ • <code>/setgroupcredit &lt;limit&gt;</code>\n"
         f"│ • <code>/setfreeze &lt;minutes&gt;</code>\n"
@@ -1855,7 +1999,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unlock_text = (
                 f"┌───「 <b>🎉 ACCESS GRANTED</b> 」───\n"
                 f"│ Operative <b>{html.escape(user.first_name)}</b> has verified both channels!\n"
-                f"│ All system protocols are now fullyto to /start  operational.\n"
+                f"│ All system protocols are now fully operational.\n"
                 f"└──────────────────────────────"
             )
 
@@ -2109,6 +2253,22 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     card = format_status_card(row, DummyUser)
     await update.message.reply_text(card, parse_mode=ParseMode.HTML)
+
+async def setreferral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await require_admin(update):
+        return
+    if not context.args:
+        await update.message.reply_text("<b>Syntax:</b> <code>/setreferral &lt;credits&gt;</code>", parse_mode=ParseMode.HTML)
+        return
+    try:
+        val = int(context.args[0])
+        if val < 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Positive integer required.")
+        return
+    set_setting("referral_bonus", str(val))
+    await update.message.reply_text(f"✅ Referral Bonus set to: <b>+{val} Search Credits / Recruit</b>", parse_mode=ParseMode.HTML)
 
 async def setprivate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
@@ -2487,7 +2647,7 @@ def main():
 
     # Intel Query Handlers
     app.add_handler(CommandHandler("num", num_command))
-    app.add_handler(CommandHandler("query", num_command))  # Backward-compatibility alias
+    app.add_handler(CommandHandler("query", num_command))
     app.add_handler(CommandHandler("vehicle", vehicle_command))
     app.add_handler(CommandHandler("adh", adhar_command))
     app.add_handler(CommandHandler("tg", tg_command))
@@ -2502,6 +2662,7 @@ def main():
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CommandHandler("user", info_command))
+    app.add_handler(CommandHandler("setreferral", setreferral_command))
     app.add_handler(CommandHandler("setprivate", setprivate_command))
     app.add_handler(CommandHandler("setgroupcredit", setgroupcredit_command))
     app.add_handler(CommandHandler("setfreeze", setfreeze_command))
@@ -2534,7 +2695,9 @@ def main():
         "⚡ Resilient 60-Socket Pool & Semaphore Control: Enabled\n"
         "🛰 Background Surveillance Audit Dispatcher: Connected\n"
         "🌐 Render Web Service HTTP Port Binding: Armed\n"
-        "🌦 Weather Intelligence Engine (/weather): Connected\n"
+        "🔄 Dual Failover Endpoints (/tg, /gm): Synchronized\n"
+        "🔗 Intel Auto-Chaining (/tg -> /num): Online\n"
+        "👥 Dynamic Referral Bonus Engine (/setreferral): Active\n"
         "📊 Live Telemetry & Inspector Tools: Integrated\n"
         "👑 Admin Unlimited Quota & Custom Limits: Armed\n"
         "=====================================================\n"
