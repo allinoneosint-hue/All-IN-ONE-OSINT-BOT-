@@ -31,67 +31,33 @@ from telegram.ext import (
 )
 
 # ============================================================
-# ANIMATED EMOJI DEFINITIONS (WITH AUTOMATIC SAFE FALLBACK)
-# ============================================================
-EMOJI_SKULL = '<tg-emoji id="5978722100985205002">☠️</tg-emoji>'
-EMOJI_SHIELD = '<tg-emoji id="5251203410396458957">🛡</tg-emoji>'
-EMOJI_LIGHTNING = '<tg-emoji id="5456140674028019486">⚡️</tg-emoji>'
-EMOJI_FIRE = '<tg-emoji id="5424972470023104089">🔥</tg-emoji>'
-EMOJI_CROWN = '<tg-emoji id="5217822164362739968">👑</tg-emoji>'
-EMOJI_WARN = '<tg-emoji id="5447644880824181073">⚠️</tg-emoji>'
-EMOJI_CHECK = '<tg-emoji id="5084979757905347540">✅</tg-emoji>'
-EMOJI_CROSS = '<tg-emoji id="5210952531676504517">❌</tg-emoji>'
-EMOJI_RADAR = '<tg-emoji id="5116508099213001597">🚨</tg-emoji>'
-EMOJI_USER = '<tg-emoji id="5116582462276764538">👤</tg-emoji>'
-EMOJI_SEARCH = '<tg-emoji id="5231012545799666522">🔍</tg-emoji>'
-
-def strip_custom_emojis(text: str) -> str:
-    """Fallback: Converts custom emoji tags to standard characters if API rejects entity."""
-    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', text)
-
-async def reply_safe_text(message, text: str, reply_markup=None, disable_web_page_preview=True):
-    """Crash-proof message sender with instant automatic entity downgrade."""
-    try:
-        return await message.reply_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=disable_web_page_preview,
-        )
-    except BadRequest as exc:
-        err_msg = str(exc).lower()
-        if "custom emoji" in err_msg or "entities" in err_msg:
-            clean = strip_custom_emojis(text)
-            return await message.reply_text(
-                text=clean,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=disable_web_page_preview,
-            )
-        raise exc
-
-# ============================================================
-# CONFIGURATION
+# CONFIGURATION (LOADED VIA ENVIRONMENT VARIABLES)
 # ============================================================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
+# Admin IDs
 ADMIN_ID_1 = int(os.getenv("ADMIN_ID_1", "0"))
 ADMIN_ID_2 = int(os.getenv("ADMIN_ID_2", "0"))
+
+# Private Surveillance / Storage Log Channel ID
 AUDIT_LOG_CHANNEL_ID = int(os.getenv("AUDIT_LOG_CHANNEL_ID", "0"))
 
 BRAND = "OBSIDIAN TRACE"
 DB_FILE = "bot.db"
-REQUEST_TIMEOUT = 55.0
+REQUEST_TIMEOUT = 25.0
 MAX_MESSAGE_LENGTH = 3900
 
+# Default free daily limits
 DEFAULT_PRIVATE_LIMIT = int(os.getenv("DEFAULT_PRIVATE_LIMIT", "3"))
 DEFAULT_GROUP_LIMIT = int(os.getenv("DEFAULT_GROUP_LIMIT", "4"))
-DEFAULT_REFERRAL_BONUS = 2
+DEFAULT_REFERRAL_BONUS = 1
 DEFAULT_FREEZE_MINUTES = 5
 
-OWNER_CONTACTS = "@pulkitinfobot, @KRUTIK_CYBER_DEVELOPER0"
+# Owner Contact Info
+OWNER_CONTACTS = "@pulkitinfobot, @KRUTIK_CYBER_DEVELOPER5"
 
+# Restricted Numbers & Telegram IDs
 RESTRICTED_QUERY_NUMBERS = {
     "6354013541",
     "9313565791",
@@ -106,29 +72,33 @@ RESTRICTED_TG_IDS = {
     "8221567311",
 }
 
+# Global Concurrency Limiter & Client
 SEMAPHORE = asyncio.Semaphore(35)
 HTTP_CLIENT: Optional[httpx.AsyncClient] = None
 
+# In-memory Rate-Limit & Spam Tracker
 USER_SPAM_MAP = {}
 USER_FREEZE_MAP = {}
 ADMIN_STATE = {}
 
 # ============================================================
-# EXTERNAL APIS CONFIG (PRIMARY & REDUNDANT FAILOVERS)
+# EXTERNAL APIS CONFIG (PRIMARY & FAILOVER BACKUPS)
 # ============================================================
 
 NUMBER_API_URL = "https://reuters-memorabilia-insulin-disclose.trycloudflare.com/num"
 NUMBER_API_KEY = os.getenv("NUMBER_API_KEY", "")
 
-VEHICLE_API_URL = "https://rajfflivebot.onrender.com/pub/rajfflive/vnum"
+VEHICLE_API_URL = "http://rajfflivebot.onrender.com/pub/rajfflive/vnum"
 VEHICLE_API_KEY = os.getenv("VEHICLE_API_KEY", "")
 
-ADHAR_API_URL = "https://rajfflivebot.onrender.com/pub/rajfflive/adhar"
+ADHAR_API_URL = "http://rajfflivebot.onrender.com/pub/rajfflive/adhar"
 ADHAR_API_KEY = os.getenv("ADHAR_API_KEY", "")
 
+# TG Primary & Failover Backup
 TG_TO_NUM_PRIMARY = "https://tg-to-num.backemdhub.workers.dev/"
 TG_TO_NUM_BACKUP = "https://ftosint.world/api/tg?key=ravixnobita&info="
 
+# Gmail Primary & Failover Backup
 GMAIL_PRIMARY = "https://rack-72au.onrender.com/gmail-info"
 GMAIL_BACKUP = "https://ftosint.world/api/email?key=ravixnobita&email="
 
@@ -138,12 +108,17 @@ IFSC_API_URL = "https://vercei-kappa.vercel.app/ifsc"
 IP_API_URL = "https://ip-dwy8.onrender.com/api/rackipapi"
 WEATHER_API_BASE_URL = "https://rack-weather.vercel.app/api/weather"
 
+# Real Browser Spoof Headers (Cloudflare Protection Bypass)
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Connection": "keep-alive",
 }
+
+# ============================================================
+# LOGGING SETUP
+# ============================================================
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -173,7 +148,7 @@ def parse_iso(value: Optional[str]) -> Optional[datetime]:
         return None
 
 # ============================================================
-# DATABASE INITIALIZATION
+# DATABASE INITIALIZATION & MIGRATIONS
 # ============================================================
 
 def db_connection() -> sqlite3.Connection:
@@ -299,11 +274,30 @@ def init_db():
             "api_weather": "1",
         }
 
-        for k, v in defaults.items():
-            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+        for key, value in defaults.items():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO settings (key, value)
+                VALUES (?, ?)
+                """,
+                (key, value),
+            )
 
-        conn.execute("INSERT OR IGNORE INTO force_channels (username, invite_link) VALUES (?, ?)", ("@KRUTIK_OSINT", "https://t.me/KRUTIK_OSINT"))
-        conn.execute("INSERT OR IGNORE INTO force_channels (username, invite_link) VALUES (?, ?)", ("@pulkit_osint", "https://t.me/pulkit_osint"))
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO force_channels (username, invite_link)
+            VALUES (?, ?)
+            """,
+            ("@KRUTIK_OSINT", "https://t.me/KRUTIK_OSINT"),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO force_channels (username, invite_link)
+            VALUES (?, ?)
+            """,
+            ("@pulkit_osint", "https://t.me/pulkit_osint"),
+        )
+
         conn.commit()
     finally:
         conn.close()
@@ -325,7 +319,8 @@ def set_setting(key: str, value: str):
     try:
         conn.execute(
             """
-            INSERT INTO settings (key, value) VALUES (?, ?)
+            INSERT INTO settings (key, value)
+            VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
             """,
             (key, str(value)),
@@ -370,7 +365,7 @@ def get_audit_channel() -> int:
     return get_int_setting("audit_log_channel", AUDIT_LOG_CHANNEL_ID)
 
 # ============================================================
-# SURVEILLANCE & LOGGING
+# SURVEILLANCE & STORAGE CHANNEL LOGGING
 # ============================================================
 
 async def send_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
@@ -380,12 +375,12 @@ async def send_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
     try:
         await context.bot.send_message(
             chat_id=log_ch,
-            text=strip_custom_emojis(log_text),
+            text=log_text,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
     except Exception as exc:
-        logger.warning("Surveillance log dispatch failed: %s", exc)
+        logger.warning("Surveillance log forwarding failed: %s", exc)
 
 def dispatch_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
     asyncio.create_task(send_audit_log(context, log_text))
@@ -412,17 +407,17 @@ async def require_admin(update: Update) -> bool:
     chat = update.effective_chat
     if not user or not is_admin(user.id):
         if update.message:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} Unauthorized access protocol.")
+            await update.message.reply_text("❌ Unauthorized access.")
         return False
     if chat and chat.type != "private":
         if update.message:
-            await reply_safe_text(update.message, "🔒 Stealth Console operates exclusively in private chat.")
+            await update.message.reply_text("🔒 Admin panel operates exclusively in private chat.")
         return False
     ensure_user(user)
     return True
 
 # ============================================================
-# ANTI-FLOOD CONTROLLER
+# ANTI-FLOOD & DYNAMIC FREEZE ENGINE
 # ============================================================
 
 def check_spam_and_freeze(user_id: int) -> tuple[bool, int]:
@@ -430,6 +425,7 @@ def check_spam_and_freeze(user_id: int) -> tuple[bool, int]:
         return False, 0
 
     now_t = now_utc()
+
     if user_id in USER_FREEZE_MAP:
         unfreeze_time = USER_FREEZE_MAP[user_id]
         if now_t < unfreeze_time:
@@ -454,7 +450,7 @@ def check_spam_and_freeze(user_id: int) -> tuple[bool, int]:
     return False, 0
 
 # ============================================================
-# USER TRACKING ENGINE
+# USER & GROUP TRACKING
 # ============================================================
 
 def ensure_user(user, referrer_id: Optional[int] = None) -> tuple[bool, Optional[int]]:
@@ -499,7 +495,8 @@ def ensure_user(user, referrer_id: Optional[int] = None) -> tuple[bool, Optional
                 conn.execute(
                     """
                     UPDATE users
-                    SET referral_credits = referral_credits + ?, updated_at = ?
+                    SET referral_credits = referral_credits + ?,
+                        updated_at = ?
                     WHERE user_id = ?
                     """,
                     (bonus, cur_iso, valid_referrer),
@@ -572,7 +569,7 @@ def record_group_activity(chat):
         conn.close()
 
 # ============================================================
-# FORCE CHANNELS CONTROLLER
+# PARALLEL CHANNELS VERIFICATION
 # ============================================================
 
 def get_force_channels() -> list[sqlite3.Row]:
@@ -603,6 +600,14 @@ def remove_force_channel(channel_id: int):
     finally:
         conn.close()
 
+def build_verification_keyboard():
+    channels = get_force_channels()
+    buttons = []
+    for ch in channels:
+        buttons.append([InlineKeyboardButton(f"📢 Join {ch['username']}", url=ch["invite_link"])])
+    buttons.append([InlineKeyboardButton("⚡ Verify / Refresh ⚡", callback_data="check_channels")])
+    return InlineKeyboardMarkup(buttons)
+
 async def check_single_member(bot, chat_id: str, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
@@ -610,7 +615,7 @@ async def check_single_member(bot, chat_id: str, user_id: int) -> bool:
             return False
         return True
     except Exception as exc:
-        logger.warning("Verification check failure on %s: %s", chat_id, exc)
+        logger.warning("Verification check failure on %s for %s: %s", chat_id, user_id, exc)
         return False
 
 async def is_user_verified(bot, user_id: int) -> bool:
@@ -717,7 +722,7 @@ def plan_is_active(user_row) -> bool:
     return True
 
 # ============================================================
-# UI FORMATTERS
+# UI FORMATTERS & CARDS
 # ============================================================
 
 def make_bar(current: int, total: int, length: int = 8) -> str:
@@ -742,7 +747,7 @@ def format_status_card(row, user) -> str:
     plan_expiry = "N/A"
 
     if row["is_unlimited"]:
-        plan_title = f"{EMOJI_LIGHTNING} UNLIMITED MASTER ACCESS"
+        plan_title = "⚡ UNLIMITED MASTER ACCESS"
         plan_quota = "Unlimited"
         plan_expiry = "Lifetime"
     elif row["plan_id"]:
@@ -752,38 +757,39 @@ def format_status_card(row, user) -> str:
         exp = parse_iso(row["plan_expires_at"])
         plan_expiry = exp.strftime("%d %b %Y, %H:%M UTC") if exp else "Unknown"
 
-    return (
-        f"┌───「 {EMOJI_SHIELD} <b>{BRAND}</b> 」───\n"
-        f"│ {EMOJI_USER} <b>Operative:</b> {html.escape(user.first_name or 'User')}\n"
+    text = (
+        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
+        f"│ 👤 <b>Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>ID:</b> <code>{user.id}</code>\n"
-        f"│ 🚫 <b>Banned:</b> {'YES ' + EMOJI_CROSS if row['is_banned'] else 'NO ' + EMOJI_CHECK}\n"
-        f"├───「 {EMOJI_LIGHTNING} <b>USAGE MATRIX</b> 」───\n"
+        f"│ 🚫 <b>Banned:</b> {'YES ❌' if row['is_banned'] else 'NO 🟢'}\n"
+        f"├───「 <b>⚡ USAGE MATRIX</b> 」───\n"
         f"│ 💬 <b>Private Daily:</b> <code>[{p_bar}]</code> {p_used}/{p_lim if p_lim > 0 else '∞'}\n"
         f"│ 👥 <b>Group Daily:</b>   <code>[{g_bar}]</code> {g_used}/{g_lim if g_lim > 0 else '∞'}\n"
         f"│ 🎟 <b>1-Day Temporary Credits:</b> <code>{row['one_day_credits']}</code>\n"
         f"│ 🎁 <b>Referral Credits:</b> <code>{row['referral_credits']}</code>\n"
         f"│ 📈 <b>Total Operations:</b> <code>{row['total_searches']}</code>\n"
-        f"├───「 📦 <b>SUBSCRIPTION</b> 」───\n"
+        f"├───「 <b>📦 SUBSCRIPTION</b> 」───\n"
         f"│ 🏷 <b>Plan:</b> {html.escape(plan_title)}\n"
         f"│ 🔢 <b>Plan Quota:</b> {plan_quota}\n"
         f"│ ⏳ <b>Valid Till:</b> {plan_expiry}\n"
         f"└──────────────────────────────"
     )
+    return text
 
 def format_result_card(data_content: str) -> str:
     return (
-        f"┌───「 {EMOJI_SEARCH} <b>INTELLIGENCE REPORT</b> 」───\n"
+        f"┌───「 <b>🔎 INTELLIGENCE REPORT</b> 」───\n"
         f"│\n"
         f"<pre>{html.escape(data_content)}</pre>\n"
         f"│\n"
-        f"├───「 {EMOJI_SHIELD} <b>POWERED BY {BRAND}</b> 」\n"
-        f"│ {EMOJI_LIGHTNING} <i>@pulkitinfobot</i>\n"
-        f"│ {EMOJI_CROWN} <b>@KRUTIK_CYBER_DEVELOPER0</b>\n"
+        f"├───「 <b>🛡️ POWERED BY {BRAND}</b> 」\n"
+        f"│ ⚡ <i>@pulkitinfobot</i>\n"
+        f"│ 👑 <b>@KRUTIK_CYBER_DEVELOPER5BOT</b>\n"
         f"└──────────────────────────────────"
     )
 
 # ============================================================
-# ACCESS CONTROLLER
+# ACCESS & LIMIT CONTROLLER
 # ============================================================
 
 async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE, api_cmd: str) -> bool:
@@ -799,12 +805,13 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
     is_frozen, rem_mins = check_spam_and_freeze(user.id)
     if is_frozen:
         if update.message:
-            await reply_safe_text(
-                update.message,
-                f"┌───「 {EMOJI_WARN} <b>FLOOD CONTROL ENGAGED</b> 」───\n"
+            await update.message.reply_text(
+                f"┌───「 <b>⚠️ FLOOD CONTROL ENGAGED</b> 」───\n"
                 f"│ Excessive query requests detected!\n"
-                f"│ Terminal frozen for <b>{rem_mins} minute(s)</b>.\n"
-                f"└────────────────────────────────────────"
+                f"│ Your terminal has been frozen for <b>{rem_mins} minute(s)</b>.\n"
+                f"│ Please stand by until cooldown expires.\n"
+                f"└────────────────────────────────────────",
+                parse_mode=ParseMode.HTML,
             )
         return False
 
@@ -817,31 +824,29 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if row["is_banned"]:
         if update.message:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} <b>Access Revoked:</b> You are permanently blacklisted.")
+            await update.message.reply_text("🚫 <b>Access Revoked:</b> You are permanently blacklisted from using this bot.", parse_mode=ParseMode.HTML)
         return False
 
     if not bot_enabled():
         if update.message:
-            await reply_safe_text(update.message, "🔴 <b>System Offline:</b> Maintenance in progress.")
+            await update.message.reply_text("🔴 <b>System Offline:</b> Bot is currently under maintenance. Please check back later.", parse_mode=ParseMode.HTML)
         return False
 
     if not api_is_active(api_cmd):
         if update.message:
-            await reply_safe_text(update.message, f"{EMOJI_WARN} <b>Suspended:</b> <code>/{api_cmd}</code> disabled by admin.")
+            await update.message.reply_text(f"⚠️ <b>Service Suspended:</b> The <code>/{api_cmd}</code> command is temporarily disabled by administrator.", parse_mode=ParseMode.HTML)
         return False
 
     verified = await is_user_verified(context.bot, user.id)
     if not verified:
-        channels = get_force_channels()
-        ch_list = "\n".join([f"• {c['username']} ➔ {c['invite_link']}" for c in channels])
+        reply_markup = build_verification_keyboard()
         if update.message:
-            await reply_safe_text(
-                update.message,
-                f"┌───「 {EMOJI_WARN} <b>CHANNEL VERIFICATION REQUIRED</b> 」───\n"
-                f"│ Please subscribe to official channels:\n\n{ch_list}\n\n"
-                f"│ Tap /start once joined to unlock access.\n"
-                f"└────────────────────────────────────────",
-                disable_web_page_preview=True
+            await update.message.reply_text(
+                "🔒 <b>Mandatory Channel Verification Required!</b>\n\n"
+                "You must be an active member of our official channels to perform queries.\n"
+                "Join the channels below and tap <b>Verify / Refresh</b>:",
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
             )
         return False
 
@@ -858,17 +863,24 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
     if limit == 0 or used < limit:
         return True
 
-    if row["one_day_credits"] > 0 or row["referral_credits"] > 0 or plan_is_active(row):
+    if row["one_day_credits"] > 0:
+        return True
+
+    if row["referral_credits"] > 0:
+        return True
+
+    if plan_is_active(row):
         return True
 
     if update.message:
-        await reply_safe_text(
-            update.message,
-            f"┌───「 {EMOJI_CROSS} <b>SEARCH LIMIT EXHAUSTED</b> 」───\n"
-            f"│ Daily search balance is complete.\n"
-            f"├───「 {EMOJI_CROWN} <b>CONTACT ADMINS</b> 」───\n"
-            f"│ {EMOJI_LIGHTNING} <b>{OWNER_CONTACTS}</b>\n"
-            f"└────────────────────────────────────────"
+        await update.message.reply_text(
+            f"┌───「 <b>⛔ SEARCH LIMIT EXHAUSTED</b> 」───\n"
+            f"│ Your search limit has been completed!\n"
+            f"│ To get more credits or upgrade your plan, contact the owners:\n"
+            f"├───「 <b>👑 CONTACT OWNERS</b> 」───\n"
+            f"│ ⚡ <b>{OWNER_CONTACTS}</b>\n"
+            f"└────────────────────────────────────────",
+            parse_mode=ParseMode.HTML,
         )
     return False
 
@@ -892,13 +904,49 @@ def consume_search(user_id: int, is_private: bool):
 
         if limit == 0 or used < limit:
             col = "daily_private_used" if is_private else "daily_group_used"
-            conn.execute(f"UPDATE users SET {col} = {col} + 1, total_searches = total_searches + 1, updated_at = ? WHERE user_id = ?", (cur_iso, user_id))
+            conn.execute(
+                f"""
+                UPDATE users
+                SET {col} = {col} + 1,
+                    total_searches = total_searches + 1,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (cur_iso, user_id),
+            )
         elif row["one_day_credits"] > 0:
-            conn.execute("UPDATE users SET one_day_credits = one_day_credits - 1, total_searches = total_searches + 1, updated_at = ? WHERE user_id = ?", (cur_iso, user_id))
+            conn.execute(
+                """
+                UPDATE users
+                SET one_day_credits = one_day_credits - 1,
+                    total_searches = total_searches + 1,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (cur_iso, user_id),
+            )
         elif row["referral_credits"] > 0:
-            conn.execute("UPDATE users SET referral_credits = referral_credits - 1, total_searches = total_searches + 1, updated_at = ? WHERE user_id = ?", (cur_iso, user_id))
+            conn.execute(
+                """
+                UPDATE users
+                SET referral_credits = referral_credits - 1,
+                    total_searches = total_searches + 1,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (cur_iso, user_id),
+            )
         else:
-            conn.execute("UPDATE users SET plan_used_uses = plan_used_uses + 1, total_searches = total_searches + 1, updated_at = ? WHERE user_id = ?", (cur_iso, user_id))
+            conn.execute(
+                """
+                UPDATE users
+                SET plan_used_uses = plan_used_uses + 1,
+                    total_searches = total_searches + 1,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (cur_iso, user_id),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -907,10 +955,9 @@ def consume_search(user_id: int, is_private: bool):
 # RESPONSE SANITIZATION & BRAND REPLACEMENTS
 # ============================================================
 
-REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER0"
+REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5BOT"
 SENSITIVE_REPLACEMENTS = [
     "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER5",
-    "@KRUTIK_CYBER_DEVELOPER5BOT",
     "@BackemdHub",
     "CREDIT / INFO Owner: @shiva_158 Free API: @Osintinfooobot Free API ke liye Channel Join karein: https://t.me/osintinfoooo For Any Kind of API: @shiva_158",
     "@Osintinfooobot",
@@ -924,7 +971,6 @@ SENSITIVE_REPLACEMENTS = [
     "@RAJFFLIVEBOT",
     "@rajfflivebot",
     "@rajfflive",
-    "t.me/AbyssOsintToolBot",
 ]
 
 def sanitize_response(text: str) -> str:
@@ -943,11 +989,8 @@ def is_empty_payload(data) -> bool:
         cleaned = data.strip().lower()
         if cleaned in ("", "null", "none", "{}", "[]", "not found", "no data found", "record not found", "error"):
             return True
-        if "usage" in cleaned and "api/tg" in cleaned:
-            return True
+    # Deep JSON Evaluation
     if isinstance(data, dict):
-        if "usage" in data and ("api/tg" in str(data["usage"]).lower() or "6858648491" in str(data)):
-            return True
         if data.get("found") is False:
             return True
         if data.get("count") == 0:
@@ -978,7 +1021,7 @@ async def send_result(update: Update, result: str):
     card = format_result_card(result)
     if len(card) <= MAX_MESSAGE_LENGTH:
         try:
-            await reply_safe_text(update.message, card, disable_web_page_preview=True)
+            await update.message.reply_text(card, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
             return
         except Exception:
             pass
@@ -990,17 +1033,17 @@ async def send_result(update: Update, result: str):
         chunks.append(result[start_pos:end_pos])
         start_pos = end_pos
     for idx, c in enumerate(chunks, 1):
-        await reply_safe_text(
-            update.message,
+        await update.message.reply_text(
             f"<b>[PART {idx}/{len(chunks)}]</b>\n<pre>{html.escape(c)}</pre>",
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
 
 # ============================================================
-# HTTP DISPATCHER WITH RESILIENT TIMEOUT
+# ASYNC HTTP DISPATCHER WITH AUTO-FAILOVER HELPER
 # ============================================================
 
-async def fetch_endpoint(url: str, params: dict, timeout_secs: float = REQUEST_TIMEOUT) -> tuple[Optional[str], Optional[dict], str]:
+async def fetch_endpoint(url: str, params: dict) -> tuple[Optional[str], Optional[dict], str]:
     global HTTP_CLIENT
     async with SEMAPHORE:
         try:
@@ -1010,7 +1053,7 @@ async def fetch_endpoint(url: str, params: dict, timeout_secs: float = REQUEST_T
                     headers=BROWSER_HEADERS,
                     follow_redirects=True,
                 )
-            resp = await HTTP_CLIENT.get(url, params=params, timeout=timeout_secs)
+            resp = await HTTP_CLIENT.get(url, params=params)
             if resp.status_code in (404, 400, 422, 500, 502, 503):
                 return None, None, f"HTTP_{resp.status_code}"
             resp.raise_for_status()
@@ -1030,18 +1073,18 @@ async def fetch_endpoint(url: str, params: dict, timeout_secs: float = REQUEST_T
             logger.exception("Fetch error on %s: %s", url, exc)
             return None, None, "FAULT"
 
-async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str, timeout_secs: float = REQUEST_TIMEOUT):
+async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
     user = update.effective_user
     chat = update.effective_chat
     searching_msg = None
 
     if update.message:
         try:
-            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Connecting to decentralized nodes... querying ⏳</code>")
+            searching_msg = await update.message.reply_text("⚡ <code>Connecting to decentralized nodes... querying ⏳</code>", parse_mode=ParseMode.HTML)
         except Exception:
             pass
 
-    raw_text, _, status = await fetch_endpoint(url, params, timeout_secs=timeout_secs)
+    raw_text, _, status = await fetch_endpoint(url, params)
     formatted_output = "NOT FOUND"
     log_status = status
 
@@ -1063,10 +1106,10 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
-            f"┌───「 {EMOJI_RADAR} <b>SURVEILLANCE TELEMETRY</b> 」───\n"
-            f"│ {EMOJI_USER} <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
+            f"┌───「 <b>🛰️ SURVEILLANCE TELEMETRY</b> 」───\n"
+            f"│ 👤 <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
             f"│ 🏷 <b>Handle:</b> @{html.escape(user.username or 'none')}\n"
-            f"│ {EMOJI_LIGHTNING} <b>Command:</b> <code>/{cmd_name}</code>\n"
+            f"│ ⚡ <b>Command:</b> <code>/{cmd_name}</code>\n"
             f"│ 🎯 <b>Target:</b> <code>{html.escape(target_val)}</code>\n"
             f"│ 📍 <b>Origin:</b> {html.escape(c_title)}\n"
             f"│ 📊 <b>Status:</b> <code>{log_status}</code>\n"
@@ -1081,21 +1124,21 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
 # ============================================================
 
 def default_welcome_text(user) -> str:
-    admin_tag = f"{EMOJI_CROWN} <b>Admin Status:</b> Unlimited Access Active\n" if is_admin(user.id) else ""
+    admin_tag = "👑 <b>Admin Status:</b> Unlimited Credits Active\n" if is_admin(user.id) else ""
     return (
-        f"┌───「 {EMOJI_SHIELD} <b>{BRAND}</b> 」───\n"
+        f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
         f"│ 👋 <b>Greetings Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>Client ID:</b> <code>{user.id}</code>\n"
         f"│ {admin_tag}"
-        f"├───「 🎁 <b>FREE SEARCH QUOTA</b> 」───\n"
+        f"├───「 <b>🎁 FREE SEARCH QUOTA</b> 」───\n"
         f"│ 💬 <b>Personal DM:</b> 3 Searches / Day\n"
         f"│ 👥 <b>Any Group:</b>   4 Searches / Day\n"
-        f"├───「 {EMOJI_FIRE} <b>ALL PROTOCOLS &amp; COMMANDS</b> 」───\n"
+        f"├───「 <b>🔥 ALL PROTOCOLS &amp; COMMANDS</b> 」───\n"
         f"│ 1. <code>/start</code> - Restart terminal\n"
-        f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (10-Digit)\n"
+        f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (10-Digit only)\n"
         f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle RC Lookup\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
-        f"│ 5. <code>/tg &lt;id|username&gt;</code> - Telegram ID/User (Auto-Num Intel)\n"
+        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Auto-Num Intel)\n"
         f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Account Lookup (Dual Node)\n"
         f"│ 7. <code>/tc &lt;val&gt;</code> - Truecaller Intelligence\n"
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
@@ -1105,10 +1148,10 @@ def default_welcome_text(user) -> str:
         f"│ 12. <code>/ref</code> - Recruitment Referral Link\n"
         f"│ 13. <code>/status</code> - Real-time Limits &amp; Quota\n"
         f"│ 14. <code>/help</code> - Full Documentation\n"
-        f"└───「 {EMOJI_CROWN} <b>SUPPORT &amp; CREDITS</b> 」───\n"
-        f"│ {EMOJI_LIGHTNING} Contact: {OWNER_CONTACTS}\n"
+        f"└───「 <b>👑 SUPPORT &amp; CREDITS</b> 」───\n"
+        f"│ ⚡ Contact Owners: {OWNER_CONTACTS}\n"
         f"└──────────────────────────────\n\n"
-        f"{EMOJI_LIGHTNING} <i>Tap the Menu button on input bar for instant commands!</i>"
+        "⚡ <i>Tap the Menu button on your input bar for instant commands!</i>"
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1132,8 +1175,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=awarded_to,
                 text=(
-                    f"┌───「 🎉 <b>RECRUITMENT BONUS AWARDED</b> 」───\n"
-                    f"│ {EMOJI_USER} Operative <code>{user.id}</code> registered through your link.\n"
+                    f"┌───「 <b>🎉 RECRUITMENT BONUS AWARDED</b> 」───\n"
+                    f"│ 👤 Operative <code>{user.id}</code> registered through your link.\n"
                     f"│ 🎁 <b>+{bonus} Extra Search Credit(s)</b> credited to your balance!\n"
                     f"└────────────────────────────────────────"
                 ),
@@ -1144,17 +1187,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     verified = await is_user_verified(context.bot, user.id)
     if not verified:
-        channels = get_force_channels()
-        ch_list = "\n".join([f"• {c['username']} ➔ {c['invite_link']}" for c in channels])
-        await reply_safe_text(
-            update.message,
-            f"┌───「 {EMOJI_SHIELD} <b>{BRAND}</b> 」───\n"
-            f"│ 🔒 <b>ACCESS DENIED: Dual Subscription Required!</b>\n"
+        await update.message.reply_text(
+            f"┌───「 <b>🛡️ {BRAND}</b> 」───\n"
+            f"│ 🔒 <b>ACCESS DENIED:</b> Dual Channel Subscription Required!\n"
             f"├───「 <b>MANDATORY CHANNELS</b> 」───\n"
-            f"{ch_list}\n\n"
-            f"Join both channels, then send /start again to proceed.\n"
+            f"│ You must be an active subscriber to both channels below.\n"
             f"└──────────────────────────────",
-            disable_web_page_preview=True,
+            reply_markup=build_verification_keyboard(),
+            parse_mode=ParseMode.HTML,
         )
         return
 
@@ -1173,18 +1213,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if m_id and m_type == "video":
         try:
-            await update.message.reply_video(video=m_id, caption=strip_custom_emojis(caption), parse_mode=ParseMode.HTML)
+            await update.message.reply_video(video=m_id, caption=caption, parse_mode=ParseMode.HTML)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed sending welcome video: %s", e)
     elif m_id and m_type == "photo":
         try:
-            await update.message.reply_photo(photo=m_id, caption=strip_custom_emojis(caption), parse_mode=ParseMode.HTML)
+            await update.message.reply_photo(photo=m_id, caption=caption, parse_mode=ParseMode.HTML)
             return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed sending welcome photo: %s", e)
 
-    await reply_safe_text(update.message, caption)
+    try:
+        await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+    except BadRequest as e:
+        logger.warning("HTML parsing error fallback: %s", e)
+        await update.message.reply_text(caption)
 
 async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1201,8 +1245,8 @@ async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bonus = get_referral_bonus()
 
     card = (
-        f"┌───「 👥 <b>ALLIED RECRUITMENT</b> 」───\n"
-        f"│ Share your unique transmission link.\n"
+        f"┌───「 <b>👥 ALLIED RECRUITMENT</b> 」───\n"
+        f"│ Share your unique transmission link with others.\n"
         f"│ Each successful recruit provides <b>+{bonus} Extra Search Credit(s)</b>!\n"
         f"├───「 <b>TRANSMISSION LINK</b> 」───\n"
         f"│ 🔗 <b>Your Link:</b>\n"
@@ -1211,7 +1255,7 @@ async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ 🎁 <b>Available Referral Balance:</b> <code>{ref_credits}</code> Searches\n"
         f"└────────────────────────────────"
     )
-    await reply_safe_text(update.message, card)
+    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1227,18 +1271,18 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     card = format_status_card(row, user)
-    await reply_safe_text(update.message, card)
+    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     text = (
-        f"┌───「 📚 <b>COMMAND DIRECTORY</b> 」───\n"
-        f"│ 1. <code>/start</code> - Initialize terminal\n"
+        f"┌───「 <b>📚 COMMAND DIRECTORY (ALL 14)</b> 」───\n"
+        f"│ 1. <code>/start</code> - Restart terminal\n"
         f"│ 2. <code>/num &lt;val&gt;</code> - Mobile Search (Strict 10-Digit)\n"
-        f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle RC Registration Search\n"
+        f"│ 3. <code>/vehicle &lt;rc&gt;</code> - Vehicle Registration Search\n"
         f"│ 4. <code>/adh &lt;val&gt;</code> - ID Record Lookup\n"
-        f"│ 5. <code>/tg &lt;id|username&gt;</code> - Telegram ID/Handle to Mobile\n"
+        f"│ 5. <code>/tg &lt;id&gt;</code> - Telegram ID to Mobile (Auto-Num Intel)\n"
         f"│ 6. <code>/gm &lt;email&gt;</code> - Gmail Intelligence (Dual Node)\n"
         f"│ 7. <code>/tc &lt;val&gt;</code> - Truecaller Intelligence\n"
         f"│ 8. <code>/pin &lt;code&gt;</code> - Postal PIN Directory\n"
@@ -1248,35 +1292,42 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ 12. <code>/ref</code> - Recruitment Link\n"
         f"│ 13. <code>/status</code> - Live Account Balance\n"
         f"│ 14. <code>/help</code> - Documentation\n"
-        f"├───「 {EMOJI_CROWN} <b>UPGRADE ACCESS</b> 」───\n"
-        f"│ Contact: {OWNER_CONTACTS}\n"
+        f"├───「 <b>👑 UPGRADE ACCESS</b> 」───\n"
+        f"│ Contact Owners: {OWNER_CONTACTS}\n"
         f"└──────────────────────────────"
     )
-    await reply_safe_text(update.message, text)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # ============================================================
-# SEARCH ENGINE
+# SEARCH COMMANDS (VALIDATION, FAILOVERS & AUTO-CHAINING)
 # ============================================================
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "num"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/num &lt;10_digit_number&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/num &lt;10_digit_number&gt;</code>", parse_mode=ParseMode.HTML)
         return
 
     val = context.args[0].strip()
+
     if not re.fullmatch(r"\d{10}", val):
-        await reply_safe_text(
-            update.message,
-            f"┌───「 {EMOJI_CROSS} <b>INVALID NUMBER FORMAT</b> 」───\n"
-            f"│ Mobile lookup requires exactly <b>10 digits</b>.\n"
-            f"└────────────────────────────────────────"
+        await update.message.reply_text(
+            "┌───「 <b>❌ INVALID NUMBER FORMAT</b> 」───\n"
+            "│ The <code>/num</code> protocol only accepts an exact <b>10-digit</b> mobile number.\n"
+            "│ <i>Example:</i> <code>/num 9876543210</code>\n"
+            "└────────────────────────────────────────",
+            parse_mode=ParseMode.HTML,
         )
         return
 
     if val in RESTRICTED_QUERY_NUMBERS:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Target identifier is protected under high-security classification.")
+        await update.message.reply_text(
+            "┌───「 <b>⛔ RESTRICTED RECORD</b> 」───\n"
+            "│ Access Denied! This target identifier is permanently protected under high-security classification.\n"
+            "└──────────────────────────────────────",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     await execute_api_search(update, context, NUMBER_API_URL, {"number": val, "key": NUMBER_API_KEY}, "num", val)
@@ -1285,54 +1336,54 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "vehicle"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/vehicle &lt;vehicle_number&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/vehicle &lt;vehicle_number&gt;</code>", parse_mode=ParseMode.HTML)
         return
     val = " ".join(context.args).strip().upper()
-    await execute_api_search(update, context, VEHICLE_API_URL, {"num2r": val, "key": VEHICLE_API_KEY}, "vehicle", val, timeout_secs=60.0)
+    await execute_api_search(update, context, VEHICLE_API_URL, {"num2r": val, "key": VEHICLE_API_KEY}, "vehicle", val)
 
 async def adhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "adh"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/adh &lt;target_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/adh &lt;target_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     val = " ".join(context.args).strip()
-    await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val, timeout_secs=60.0)
+    await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val)
 
 # ------------------------------------------------------------
-# /tg (DUAL RESOLVER & AUTO-CHAINING ENGINE)
+# DUAL FAILOVER & AUTO-CHAINING TELEGRAM COMMAND (/tg ➔ /num)
 # ------------------------------------------------------------
 async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "tg"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/tg &lt;id_or_username&gt;</code>")
-        return
-
-    raw_input = context.args[0].strip()
-    target_id_str = raw_input
-
-    # Resolves usernames to ID seamlessly
-    if not raw_input.isdigit():
-        uname = raw_input.lstrip("@")
-        try:
-            chat_obj = await context.bot.get_chat(f"@{uname}")
-            target_id_str = str(chat_obj.id)
-        except Exception:
-            target_id_str = raw_input
-
-    if not re.fullmatch(r"\d{5,16}", target_id_str):
-        await reply_safe_text(
-            update.message,
-            f"┌───「 {EMOJI_CROSS} <b>IDENTIFIER RESOLUTION FAILED</b> 」───\n"
-            f"│ Could not resolve to a valid numeric Telegram ID.\n"
-            f"│ <b>Format:</b> <code>/tg 6123456789</code> or <code>/tg @handle</code>\n"
-            f"└──────────────────────────────"
+        await update.message.reply_text(
+            "<b>Syntax:</b> <code>/tg &lt;user_id&gt;</code>\n\n"
+            "⚠️ <b>Numeric Telegram User ID required!</b> Usernames are rejected.",
+            parse_mode=ParseMode.HTML,
         )
         return
 
-    if target_id_str in RESTRICTED_TG_IDS:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Telegram ID is protected under security protocols.")
+    val = context.args[0].strip()
+
+    if not re.fullmatch(r"\d{5,15}", val):
+        await update.message.reply_text(
+            "┌───「 <b>❌ INVALID IDENTIFIER</b> 」───\n"
+            "│ Only numeric Telegram User IDs are allowed!\n"
+            "│ Usernames (@username) are rejected.\n"
+            "│ <b>Example:</b> <code>/tg 6123456789</code>\n"
+            "└──────────────────────────────",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if val in RESTRICTED_TG_IDS:
+        await update.message.reply_text(
+            "┌───「 <b>⛔ RESTRICTED RECORD</b> 」───\n"
+            "│ Access Denied! This Telegram ID is protected under security protocols.\n"
+            "└──────────────────────────────────────",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     user = update.effective_user
@@ -1341,25 +1392,26 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         try:
-            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Chaining nodes &amp; querying Telegram directory... ⏳</code>")
+            searching_msg = await update.message.reply_text("⚡ <code>Querying Telegram Decentralized Hub &amp; Chaining Nodes... ⏳</code>", parse_mode=ParseMode.HTML)
         except Exception:
             pass
 
-    # Primary lookup
-    raw_text, parsed_data, status = await fetch_endpoint(TG_TO_NUM_PRIMARY, {"tg": target_id_str})
+    # Step 1: Hit Primary Endpoint
+    raw_text, parsed_data, status = await fetch_endpoint(TG_TO_NUM_PRIMARY, {"tg": val})
     resolved_via = "PRIMARY"
 
-    # Backup failover
+    # Step 2: Fallback to Backup Endpoint on failure/empty
     if not raw_text or is_empty_payload(parsed_data or raw_text):
-        backup_url = f"{TG_TO_NUM_BACKUP}{target_id_str}"
+        backup_url = f"{TG_TO_NUM_BACKUP}{val}"
         raw_text, parsed_data, status = await fetch_endpoint(backup_url, {})
-        resolved_via = "FAILOVER"
+        resolved_via = "BACKUP_FAILOVER"
 
     extracted_number = None
     final_output = "NOT FOUND"
     log_status = status
 
     if raw_text and not is_empty_payload(parsed_data or raw_text):
+        # Extract mobile number if present in JSON payload
         if isinstance(parsed_data, dict):
             for k in ("mobile", "number", "phone", "phone_number"):
                 if parsed_data.get(k):
@@ -1368,10 +1420,12 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         extracted_number = c_num[-10:]
                         break
 
-        num_raw, num_parsed = None, None
-        if extracted_number and extracted_number != "6858648491":
+        # Step 3: Auto-Pivot Chaining to /num API if number extracted
+        num_raw = None
+        if extracted_number:
             num_raw, num_parsed, _ = await fetch_endpoint(NUMBER_API_URL, {"number": extracted_number, "key": NUMBER_API_KEY})
 
+        # Step 4: Consolidate Output Report
         composite_report = {}
         composite_report["telegram_profile"] = parsed_data if parsed_data else raw_text
         if num_raw and not is_empty_payload(num_parsed or num_raw):
@@ -1393,11 +1447,11 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
-            f"┌───「 {EMOJI_RADAR} <b>SURVEILLANCE TELEMETRY</b> 」───\n"
-            f"│ {EMOJI_USER} <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
+            f"┌───「 <b>🛰️ SURVEILLANCE TELEMETRY</b> 」───\n"
+            f"│ 👤 <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
             f"│ 🏷 <b>Handle:</b> @{html.escape(user.username or 'none')}\n"
-            f"│ {EMOJI_LIGHTNING} <b>Command:</b> <code>/tg</code> (Auto-Chain Engine)\n"
-            f"│ 🎯 <b>Target:</b> <code>{html.escape(target_id_str)}</code>\n"
+            f"│ ⚡ <b>Command:</b> <code>/tg</code> (Auto-Chain Engine)\n"
+            f"│ 🎯 <b>Target:</b> <code>{html.escape(val)}</code>\n"
             f"│ 📱 <b>Extracted Phone:</b> <code>{extracted_number or 'None'}</code>\n"
             f"│ 📍 <b>Origin:</b> {html.escape(c_title)}\n"
             f"│ 📊 <b>Status:</b> <code>{log_status}</code>\n"
@@ -1408,17 +1462,17 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_result(update, final_output)
 
 # ------------------------------------------------------------
-# /gm (GMAIL FAILOVER ENGINE)
+# DUAL FAILOVER GMAIL COMMAND (/gm)
 # ------------------------------------------------------------
 async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "gm"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/gm &lt;target_email&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/gm &lt;target_email&gt;</code>", parse_mode=ParseMode.HTML)
         return
     email = " ".join(context.args).strip()
     if "@" not in email or "." not in email:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Provide a valid email format.")
+        await update.message.reply_text("❌ <b>Syntax Error:</b> Please provide a valid email format.", parse_mode=ParseMode.HTML)
         return
 
     user = update.effective_user
@@ -1427,11 +1481,13 @@ async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         try:
-            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Scanning email registries... ⏳</code>")
+            searching_msg = await update.message.reply_text("⚡ <code>Scanning Decentralized Email Registry... ⏳</code>", parse_mode=ParseMode.HTML)
         except Exception:
             pass
 
+    # Primary
     raw_text, _, status = await fetch_endpoint(GMAIL_PRIMARY, {"q": email})
+    # Backup Fallback
     if not raw_text or is_empty_payload(raw_text):
         backup_url = f"{GMAIL_BACKUP}{email}"
         raw_text, _, status = await fetch_endpoint(backup_url, {})
@@ -1457,10 +1513,10 @@ async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user:
         c_title = "DM (Personal)" if (chat and chat.type == "private") else (chat.title or "Group")
         audit_msg = (
-            f"┌───「 {EMOJI_RADAR} <b>SURVEILLANCE TELEMETRY</b> 」───\n"
-            f"│ {EMOJI_USER} <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
+            f"┌───「 <b>🛰️ SURVEILLANCE TELEMETRY</b> 」───\n"
+            f"│ 👤 <b>Operative:</b> {html.escape(user.first_name)} (<code>{user.id}</code>)\n"
             f"│ 🏷 <b>Handle:</b> @{html.escape(user.username or 'none')}\n"
-            f"│ {EMOJI_LIGHTNING} <b>Command:</b> <code>/gm</code> (Dual Node)\n"
+            f"│ ⚡ <b>Command:</b> <code>/gm</code> (Dual Node)\n"
             f"│ 🎯 <b>Target:</b> <code>{html.escape(email)}</code>\n"
             f"│ 📍 <b>Origin:</b> {html.escape(c_title)}\n"
             f"│ 📊 <b>Status:</b> <code>{log_status}</code>\n"
@@ -1474,7 +1530,7 @@ async def truecaller_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not update.message or not await check_search_access(update, context, "tc"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/tc &lt;phone_number&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/tc &lt;phone_number&gt;</code>", parse_mode=ParseMode.HTML)
         return
     number = " ".join(context.args).strip()
     await execute_api_search(update, context, TRUECALLER_API_URL, {"q": number}, "tc", number)
@@ -1483,11 +1539,11 @@ async def pin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "pin"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/pin &lt;pincode&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/pin &lt;pincode&gt;</code>", parse_mode=ParseMode.HTML)
         return
     pin = " ".join(context.args).strip()
     if not re.fullmatch(r"\d{4,10}", pin):
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Postal code must be numeric digits.")
+        await update.message.reply_text("❌ <b>Syntax Error:</b> Postal code must contain valid numeric digits.", parse_mode=ParseMode.HTML)
         return
     await execute_api_search(update, context, PINCODE_API_URL, {"search": pin}, "pin", pin)
 
@@ -1495,7 +1551,7 @@ async def ifsc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "ifsc"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ifsc &lt;ifsc_code&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/ifsc &lt;ifsc_code&gt;</code>", parse_mode=ParseMode.HTML)
         return
     code = " ".join(context.args).strip().upper()
     await execute_api_search(update, context, IFSC_API_URL, {"code": code}, "ifsc", code)
@@ -1504,7 +1560,7 @@ async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "ip"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ip &lt;ip_address&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/ip &lt;ip_address&gt;</code>", parse_mode=ParseMode.HTML)
         return
     ip_val = " ".join(context.args).strip()
     await execute_api_search(update, context, IP_API_URL, {"ip": ip_val}, "ip", ip_val)
@@ -1513,7 +1569,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "weather"):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/weather &lt;city&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/weather &lt;city_or_state&gt;</code>\n<i>Example: /weather delhi</i>", parse_mode=ParseMode.HTML)
         return
     location = " ".join(context.args).strip()
     target_url = f"{WEATHER_API_BASE_URL}/{location}"
@@ -1532,22 +1588,13 @@ async def safe_edit_text(query, text: str, reply_markup: Optional[InlineKeyboard
             disable_web_page_preview=True,
         )
     except BadRequest as e:
-        err_msg = str(e).lower()
-        if "custom emoji" in err_msg or "entities" in err_msg:
-            clean_text = strip_custom_emojis(text)
-            await query.edit_message_text(
-                text=clean_text,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
-            )
-        elif "message is not modified" not in err_msg:
+        if "Message is not modified" not in str(e):
             logger.warning("safe_edit_text error: %s", e)
     except Exception as e:
         logger.exception("safe_edit_text exception: %s", e)
 
 # ============================================================
-# STEALTH ADMIN PANEL (ADMINS ONLY BUTTON INTERFACE)
+# ADMIN INTERFACE DASHBOARD (GRID DESIGN)
 # ============================================================
 
 def admin_dashboard_keyboard():
@@ -1589,15 +1636,15 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     text = (
-        f"┌───「 {EMOJI_SHIELD} <b>{BRAND} ADMIN CENTRAL</b> 」───\n"
-        f"│ Welcome to Central Command Terminal.\n"
-        f"│ Stealth Console enabled exclusively for Administrators.\n"
+        f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+        f"│ Welcome to the Central Command Terminal.\n"
+        f"│ Choose an administration module to configure:\n"
         f"└────────────────────────────────────────"
     )
-    await reply_safe_text(update.message, text, reply_markup=admin_dashboard_keyboard())
+    await update.message.reply_text(text, reply_markup=admin_dashboard_keyboard(), parse_mode=ParseMode.HTML)
 
 # ============================================================
-# ADMIN SUBMENUS
+# ADMIN SUBMENUS (ALL STATUS, APIS & CONTROLS)
 # ============================================================
 
 USERS_PER_PAGE = 8
@@ -1629,30 +1676,34 @@ async def show_all_status(query):
     api_stat_str = " ".join([f"/{a}:{'🟢' if api_is_active(a) else '🔴'}" for a in apis])
 
     text = (
-        f"┌───「 📊 <b>{BRAND} | LIVE TELEMETRY</b> 」───\n"
+        f"┌───「 <b>📊 {BRAND} | LIVE TELEMETRY</b> 」───\n"
         f"│ 🤖 <b>Mainframe Engine:</b> {bot_st}\n"
-        f"│ 📢 <b>Force-Join Engine:</b> {fj_st}\n"
-        f"├───「 👥 <b>USER BASE METRICS</b> 」───\n"
+        f"│ 📢 <b>Dual Force-Join:</b> {fj_st}\n"
+        f"├───「 <b>👥 USER BASE METRICS</b> 」───\n"
         f"│ • Total Registered: <code>{total_users}</code>\n"
         f"│ • Active Unlimited: <code>{unlimited_users}</code>\n"
         f"│ • Plan Subscribers: <code>{paid_users}</code>\n"
-        f"│ • Blacklisted: <code>{banned_users}</code>\n"
-        f"├───「 🌐 <b>OPERATIONS</b> 」───\n"
+        f"│ • Blacklisted / Banned: <code>{banned_users}</code>\n"
+        f"├───「 <b>🌐 NETWORK & OPERATIONS</b> 」───\n"
         f"│ • Total Group Hubs: <code>{total_groups}</code>\n"
-        f"│ • Group Operations: <code>{group_searches}</code>\n"
+        f"│ • Operations in Groups: <code>{group_searches}</code>\n"
         f"│ • Lifetime Operations: <code>{total_searches}</code>\n"
-        f"├───「 ⚙️ <b>LIVE POLICIES</b> 」───\n"
-        f"│ • DM Limit: <code>{p_lim}</code> | Group Limit: <code>{g_lim}</code>\n"
+        f"├───「 <b>⚙️ LIVE POLICIES</b> 」───\n"
+        f"│ • DM Daily Limit: <code>{p_lim}</code> Searches\n"
+        f"│ • Group Daily Limit: <code>{g_lim}</code> Searches\n"
         f"│ • Referral Bonus: <code>{ref_b}</code> Credits/Invite\n"
-        f"│ • Freeze Timer: <code>{frz_t}</code> Min | Audit Log: {ch_status}\n"
-        f"├───「 {EMOJI_LIGHTNING} <b>API GATEWAYS</b> 」───\n"
+        f"│ • Anti-Spam Freeze: <code>{frz_t}</code> Minutes\n"
+        f"│ • Storage Channel: {ch_status}\n"
+        f"├───「 <b>⚡ API GATEWAYS STATUS</b> 」───\n"
         f"│ {api_stat_str}\n"
+        f"├───「 <b>🔍 SINGLE USER INSPECTOR</b> 」───\n"
+        f"│ Run: <code>/info &lt;user_id&gt;</code> to inspect any user.\n"
         f"└──────────────────────────────────────"
     )
 
     buttons = [
         [InlineKeyboardButton("🔄 Refresh Telemetry", callback_data="adm_all_status")],
-        [InlineKeyboardButton("🔙 Return", callback_data="adm_home")],
+        [InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")],
     ]
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -1661,20 +1712,34 @@ async def show_admin_users(query, page: int):
     try:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         offset = page * USERS_PER_PAGE
-        rows = conn.execute("SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?", (USERS_PER_PAGE, offset)).fetchall()
+        rows = conn.execute(
+            """
+            SELECT * FROM users
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (USERS_PER_PAGE, offset),
+        ).fetchall()
     finally:
         conn.close()
 
     if not rows:
-        await safe_edit_text(query, "👥 <b>No operatives logged.</b>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]))
+        await safe_edit_text(
+            query,
+            "👥 <b>No operatives logged in database yet.</b>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]),
+        )
         return
 
-    text = f"┌───「 👥 <b>OPERATIVE DIRECTORY (Total: {total})</b> 」───\n"
+    text = f"┌───「 <b>👥 OPERATIVE DIRECTORY (Total: {total})</b> 」───\n"
     for r in rows:
         uname = f"@{html.escape(r['username'])}" if r["username"] else "No Handle"
-        plan = f"{EMOJI_LIGHTNING} Unlimited" if r["is_unlimited"] else (html.escape(str(r["plan_name"])) if r["plan_name"] else "Free")
-        state = f"{EMOJI_CROSS}" if r["is_banned"] else f"{EMOJI_CHECK}"
-        text += f"│ {state} <code>{r['user_id']}</code> | {uname}\n│    🏷 Plan: {plan} | Ref: {r['referral_credits']} | Searches: {r['total_searches']}\n"
+        plan = "⚡ Unlimited" if r["is_unlimited"] else (html.escape(str(r["plan_name"])) if r["plan_name"] else "Free")
+        state = "🚫" if r["is_banned"] else "🟢"
+        text += (
+            f"│ {state} <code>{r['user_id']}</code> | {uname}\n"
+            f"│    🏷 Plan: {plan} | Ref: {r['referral_credits']} | Total: {r['total_searches']}\n"
+        )
     text += "└────────────────────────────────────────"
 
     buttons = []
@@ -1685,7 +1750,7 @@ async def show_admin_users(query, page: int):
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"adm_users_{page + 1}"))
     if nav:
         buttons.append(nav)
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
 
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -1694,19 +1759,35 @@ async def show_admin_blocked(query, page: int):
     try:
         total = conn.execute("SELECT COUNT(*) FROM users WHERE is_banned = 1").fetchone()[0]
         offset = page * USERS_PER_PAGE
-        rows = conn.execute("SELECT * FROM users WHERE is_banned = 1 ORDER BY updated_at DESC LIMIT ? OFFSET ?", (USERS_PER_PAGE, offset)).fetchall()
+        rows = conn.execute(
+            """
+            SELECT * FROM users
+            WHERE is_banned = 1
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (USERS_PER_PAGE, offset),
+        ).fetchall()
     finally:
         conn.close()
 
     if not rows:
-        await safe_edit_text(query, f"{EMOJI_CHECK} <b>No operatives currently blocked.</b>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]))
+        await safe_edit_text(
+            query,
+            "🟢 <b>No operatives are currently blocked.</b>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]),
+        )
         return
 
-    text = f"┌───「 🚫 <b>BLACKLIST DIRECTORY (Total: {total})</b> 」───\n"
+    text = f"┌───「 <b>🚫 BLACKLIST DIRECTORY (Total: {total})</b> 」───\n"
     for r in rows:
         uname = f"@{html.escape(r['username'])}" if r["username"] else "No Handle"
-        text += f"│ {EMOJI_CROSS} <code>{r['user_id']}</code> | {uname}\n"
-    text += f"├───「 <b>ACTION</b> 」───\n│ Use <code>/unban &lt;id&gt;</code> to unban.\n└──────────────────────────────"
+        text += f"│ 🚫 <code>{r['user_id']}</code> | {uname}\n"
+    text += (
+        f"├───「 <b>UNBLOCK ACTION</b> 」───\n"
+        f"│ Use <code>/unban &lt;user_id&gt;</code> to restore privileges.\n"
+        f"└──────────────────────────────"
+    )
 
     buttons = []
     nav = []
@@ -1716,7 +1797,7 @@ async def show_admin_blocked(query, page: int):
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"adm_blocked_{page + 1}"))
     if nav:
         buttons.append(nav)
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
 
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -1725,19 +1806,34 @@ async def show_admin_groups(query, page: int):
     try:
         total = conn.execute("SELECT COUNT(*) FROM tracked_groups").fetchone()[0]
         offset = page * USERS_PER_PAGE
-        rows = conn.execute("SELECT * FROM tracked_groups ORDER BY total_searches DESC LIMIT ? OFFSET ?", (USERS_PER_PAGE, offset)).fetchall()
+        rows = conn.execute(
+            """
+            SELECT * FROM tracked_groups
+            ORDER BY total_searches DESC
+            LIMIT ? OFFSET ?
+            """,
+            (USERS_PER_PAGE, offset),
+        ).fetchall()
     finally:
         conn.close()
 
     if not rows:
-        await safe_edit_text(query, "🌐 <b>No active groups tracked.</b>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]))
+        await safe_edit_text(
+            query,
+            "🌐 <b>No active groups tracked yet.</b>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]),
+        )
         return
 
-    text = f"┌───「 🌐 <b>ACTIVE GROUPS MATRIX (Total: {total})</b> 」───\n"
+    text = f"┌───「 <b>🌐 ACTIVE GROUPS MATRIX (Total: {total})</b> 」───\n"
     for r in rows:
         title = html.escape(r["group_title"] or "Group")
         last_act = r["last_active"][:16].replace("T", " ") if r["last_active"] else "N/A"
-        text += f"│ 👥 <b>{title}</b>\n│    🆔 <code>{r['group_id']}</code> | Searches: <code>{r['total_searches']}</code> | Active: <code>{last_act}</code>\n"
+        text += (
+            f"│ 👥 <b>{title}</b>\n"
+            f"│    🆔 <code>{r['group_id']}</code> | 📈 Searches: <code>{r['total_searches']}</code>\n"
+            f"│    ⏱ Last Active: <code>{last_act} UTC</code>\n"
+        )
     text += "└────────────────────────────────────────"
 
     buttons = []
@@ -1748,7 +1844,7 @@ async def show_admin_groups(query, page: int):
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"adm_groups_{page + 1}"))
     if nav:
         buttons.append(nav)
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
 
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -1764,43 +1860,56 @@ async def show_admin_apis(query):
             row = []
     if row:
         buttons.append(row)
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
-    await safe_edit_text(query, "<b>Tap an endpoint to Toggle 🟢 ON / 🔴 OFF:</b>", reply_markup=InlineKeyboardMarkup(buttons))
+
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
+    text = (
+        f"┌───「 <b>⚡ API GATEWAY ROUTER</b> 」───\n"
+        f"│ Tap an endpoint to instantly Toggle 🟢 ON / 🔴 OFF.\n"
+        f"│ Disabled APIs reject user queries gracefully.\n"
+        f"└──────────────────────────────────────"
+    )
+    await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_admin_plans(query):
     plans = list_plans()
     buttons = []
-    text = f"┌───「 📦 <b>SUBSCRIPTIONS DIRECTORY</b> 」───\n"
+    text = f"┌───「 <b>📦 SUBSCRIPTION PLANS DIRECTORY</b> 」───\n"
     if not plans:
-        text += "│ <i>No custom subscription packages created.</i>\n"
+        text += "│ <i>No custom subscription packages created yet.</i>\n"
     else:
         for p in plans:
             p_name = html.escape(str(p['name']))
             text += f"│ 🆔 <code>{p['id']}</code> | <b>{p_name}</b> | {p['days']}d | {p['uses']} Quota\n"
             buttons.append([InlineKeyboardButton(f"🗑 Delete '{p_name}'", callback_data=f"adm_delplan_{p['id']}")])
     text += (
-        f"├───「 <b>COMMANDS</b> 」───\n"
+        f"├───「 <b>COMMAND SHORTCUTS</b> 」───\n"
         f"│ • <code>/createplan &lt;NAME&gt; &lt;DAYS&gt; &lt;USES&gt;</code>\n"
         f"│ • <code>/grant &lt;USER_ID&gt; &lt;PLAN_ID&gt;</code>\n"
         f"│ • <code>/revoke &lt;USER_ID&gt;</code>\n"
         f"└──────────────────────────────────"
     )
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_admin_channels(query):
     channels = get_force_channels()
     buttons = []
-    text = f"┌───「 📢 <b>FORCE-JOIN CHANNELS</b> 」───\n"
+    text = f"┌───「 <b>📢 FORCE-JOIN CHANNELS MATRIX</b> 」───\n"
     if not channels:
-        text += "│ <i>No force channels configured.</i>\n"
+        text += "│ <i>No verification channels configured.</i>\n"
     else:
         for ch in channels:
             text += f"│ 📢 <b>{ch['username']}</b> ➔ <a href='{ch['invite_link']}'>Link</a>\n"
             buttons.append([InlineKeyboardButton(f"🗑 Remove {ch['username']}", callback_data=f"adm_delch_{ch['id']}")])
 
     buttons.append([InlineKeyboardButton("➕ Add New Channel", callback_data="adm_addch_prompt")])
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
+    text += (
+        f"├───「 <b>OPERATION RULES</b> 」───\n"
+        f"│ Users MUST join all listed channels before querying.\n"
+        f"│ Make sure the bot is an Administrator in these channels!\n"
+        f"└──────────────────────────────────────"
+    )
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_admin_welcome(query):
@@ -1808,15 +1917,17 @@ async def show_admin_welcome(query):
     m_id = get_setting("welcome_media_id")
     m_type = get_setting("welcome_media_type")
 
-    text_status = "Custom HTML Text" if w_text else "Default Layout"
+    text_status = "Custom HTML Text" if w_text else "Default Cyber Layout"
     media_status = f"Active ({m_type.upper()})" if m_id else "None (Pure Text)"
 
     text = (
-        f"┌───「 🎨 <b>WELCOME STUDIO</b> 」───\n"
+        f"┌───「 <b>🎨 WELCOME STUDIO DASHBOARD</b> 」───\n"
         f"│ 📝 <b>Text Engine:</b> {text_status}\n"
-        f"│ 🎬 <b>Media:</b> {media_status}\n"
-        f"├───「 <b>PLACEHOLDERS</b> 」───\n"
-        f"│ • <code>{{name}}</code>, <code>{{id}}</code>, <code>{{mention}}</code>\n"
+        f"│ 🎬 <b>Media Attachment:</b> {media_status}\n"
+        f"├───「 <b>DYNAMIC PLACEHOLDERS</b> 」───\n"
+        f"│ • <code>{{name}}</code> ➔ User first name\n"
+        f"│ • <code>{{id}}</code> ➔ Numeric User ID\n"
+        f"│ • <code>{{mention}}</code> ➔ Clickable Profile Tag\n"
         f"└──────────────────────────────────────"
     )
 
@@ -1825,10 +1936,11 @@ async def show_admin_welcome(query):
         [InlineKeyboardButton("🎬 Upload Photo/Video", callback_data="adm_set_wmedia")],
     ]
     if m_id:
-        buttons.append([InlineKeyboardButton("🗑 Remove Media", callback_data="adm_del_wmedia")])
+        buttons.append([InlineKeyboardButton("🗑 Remove Media (Reset Text Only)", callback_data="adm_del_wmedia")])
     if w_text:
         buttons.append([InlineKeyboardButton("🔄 Reset to Default Layout", callback_data="adm_reset_wtext")])
-    buttons.append([InlineKeyboardButton("🔙 Return", callback_data="adm_home")])
+
+    buttons.append([InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")])
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_admin_settings(query):
@@ -1841,15 +1953,17 @@ async def show_admin_settings(query):
     fj_status = "🟢 Enforced" if force_join_active() else "🔴 Bypassed"
 
     text = (
-        f"┌───「 ⚙️ <b>SYSTEM CONFIGURATION</b> 」───\n"
-        f"│ 🤖 <b>Mainframe:</b> {status}\n"
-        f"│ 📢 <b>Force-Join:</b> {fj_status}\n"
-        f"│ 💬 <b>DM Limit:</b> <code>{p_lim}</code> | 👥 <b>Group Limit:</b> <code>{g_lim}</code>\n"
-        f"│ 🎁 <b>Referral Bonus:</b> <code>{ref_b}</code> Credits/Invite\n"
-        f"│ ❄️ <b>Freeze Timer:</b> <code>{freeze_t}</code> Min\n"
-        f"│ 🛰 <b>Surveillance Channel:</b> <code>{audit_ch if audit_ch != 0 else 'None'}</code>\n"
-        f"├───「 <b>ADMIN COMMANDS</b> 」───\n"
-        f"│ • <code>/setreferral &lt;credits&gt;</code>\n"
+        f"┌───「 <b>⚙️ CORE SYSTEM CONFIGURATION</b> 」───\n"
+        f"│ 🤖 <b>Mainframe Status:</b> {status}\n"
+        f"│ 📢 <b>Force-Join Engine:</b> {fj_status}\n"
+        f"│ 💬 <b>Global Private Limit:</b> <code>{p_lim}</code> Searches\n"
+        f"│ 👥 <b>Global Group Limit:</b>   <code>{g_lim}</code> Searches\n"
+        f"│ 🎁 <b>Referral Bonus:</b>      <code>{ref_b}</code> Credit / Invite\n"
+        f"│ ❄️ <b>Anti-Spam Freeze:</b>    <code>{freeze_t}</code> Minutes\n"
+        f"│ 🛰 <b>Surveillance Channel:</b> <code>{audit_ch if audit_ch != 0 else 'Not Set'}</code>\n"
+        f"├───「 <b>MANAGEMENT PROTOCOLS</b> 」───\n"
+        f"│ • <code>/info &lt;user_id&gt;</code> (Inspect User)\n"
+        f"│ • <code>/setreferral &lt;credits&gt;</code> (Set Referral Bonus)\n"
         f"│ • <code>/setprivate &lt;limit&gt;</code>\n"
         f"│ • <code>/setgroupcredit &lt;limit&gt;</code>\n"
         f"│ • <code>/setfreeze &lt;minutes&gt;</code>\n"
@@ -1860,11 +1974,11 @@ async def show_admin_settings(query):
         f"│ • <code>/blockall</code> | <code>/unblockall</code>\n"
         f"└──────────────────────────────────────"
     )
-    buttons = [[InlineKeyboardButton("🔙 Return", callback_data="adm_home")]]
+    buttons = [[InlineKeyboardButton("🔙 Return to Mainframe", callback_data="adm_home")]]
     await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(buttons))
 
 # ============================================================
-# CALLBACK QUERY ROUTER (ADMIN ONLY)
+# CALLBACK ROUTER & VERIFICATION
 # ============================================================
 
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1872,9 +1986,45 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query:
         return
     user = query.from_user
+    chat = query.message.chat if query.message else None
+
+    if query.data == "check_channels":
+        verified = await is_user_verified(context.bot, user.id)
+        if verified:
+            await query.answer("✅ Verification passed! Access granted.", show_alert=True)
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+
+            unlock_text = (
+                f"┌───「 <b>🎉 ACCESS GRANTED</b> 」───\n"
+                f"│ Operative <b>{html.escape(user.first_name)}</b> has verified both channels!\n"
+                f"│ All system protocols are now fully operational.\n"
+                f"└──────────────────────────────"
+            )
+
+            if chat and chat.type in ("group", "supergroup"):
+                await context.bot.send_message(
+                    chat_id=chat.id,
+                    text=f"🎉 <a href='tg://user?id={user.id}'>{html.escape(user.first_name)}</a> verification successful! You can now use all commands here.",
+                    parse_mode=ParseMode.HTML,
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=user.id,
+                    text=unlock_text,
+                    parse_mode=ParseMode.HTML,
+                )
+        else:
+            await query.answer(
+                "❌ Verification Failed!\n\nYou must join BOTH official channels first.\nTap the join buttons and try again.",
+                show_alert=True,
+            )
+        return
 
     if not user or not is_admin(user.id):
-        await query.answer("❌ Stealth Console: Restricted to Administrators only.", show_alert=True)
+        await query.answer("❌ Unauthorized Access Protocol.", show_alert=True)
         return
 
     await query.answer()
@@ -1884,8 +2034,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "adm_home":
             ADMIN_STATE.pop(user.id, None)
             text = (
-                f"┌───「 {EMOJI_SHIELD} <b>{BRAND} ADMIN CENTRAL</b> 」───\n"
-                f"│ Command Console active.\n"
+                f"┌───「 <b>🛡️ {BRAND} ADMIN CENTRAL</b> 」───\n"
+                f"│ Central Command Terminal Active.\n"
+                f"│ Choose an administration module to configure:\n"
                 f"└────────────────────────────────────────"
             )
             await safe_edit_text(query, text, reply_markup=admin_dashboard_keyboard())
@@ -1894,11 +2045,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "adm_toggle_bot":
             new_st = not bot_enabled()
             set_setting("bot_enabled", "1" if new_st else "0")
-            await safe_edit_text(query, "Bot status updated.", reply_markup=admin_dashboard_keyboard())
+            await safe_edit_text(query, "Status updated.", reply_markup=admin_dashboard_keyboard())
         elif data == "adm_toggle_fj":
             new_fj = not force_join_active()
             set_setting("force_join_enabled", "1" if new_fj else "0")
-            await safe_edit_text(query, "Force-join status updated.", reply_markup=admin_dashboard_keyboard())
+            await safe_edit_text(query, "Status updated.", reply_markup=admin_dashboard_keyboard())
         elif data.startswith("adm_users_"):
             page = int(data.split("_")[-1])
             await show_admin_users(query, page)
@@ -1930,7 +2081,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ADMIN_STATE[user.id] = "awaiting_channel"
             await safe_edit_text(
                 query,
-                "<b>Send channel details:</b>\n\n<code>@channel_username https://t.me/invite_link</code>",
+                "<b>Send channel details in this exact format:</b>\n\n"
+                "<code>@channel_username https://t.me/invite_link</code>\n\n"
+                "<i>Example: @KRUTIK_OSINT https://t.me/KRUTIK_OSINT</i>",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel", callback_data="adm_channels")]]),
             )
         elif data == "adm_welcome":
@@ -1939,14 +2092,15 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ADMIN_STATE[user.id] = "awaiting_welcome_text"
             await safe_edit_text(
                 query,
-                "<b>Send Custom Welcome Text (HTML supported):</b>\nPlaceholders: <code>{name}</code>, <code>{id}</code>, <code>{mention}</code>",
+                "<b>Send the custom Welcome Text now (HTML supported).</b>\n\n"
+                "Supported Placeholders: <code>{name}</code>, <code>{id}</code>, <code>{mention}</code>",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel", callback_data="adm_welcome")]]),
             )
         elif data == "adm_set_wmedia":
             ADMIN_STATE[user.id] = "awaiting_welcome_media"
             await safe_edit_text(
                 query,
-                "<b>Send Welcome Photo or Video:</b>",
+                "<b>Send your Welcome Photo or Video directly into this chat.</b>",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel", callback_data="adm_welcome")]]),
             )
         elif data == "adm_del_wmedia":
@@ -1960,16 +2114,18 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ADMIN_STATE[user.id] = "awaiting_broadcast_payload"
             await safe_edit_text(
                 query,
-                "<b>Send the message or media to broadcast to all users:</b>",
+                "<b>Send the broadcast message/media now.</b>\n\n"
+                "Supports: Plain Text, Photo with caption, Video, Document, Voice, Audio, or Stickers.\n"
+                "It will be delivered to ALL registered users.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel", callback_data="adm_home")]]),
             )
         elif data == "adm_settings":
             await show_admin_settings(query)
     except Exception as exc:
-        logger.exception("Callback error: %s", exc)
+        logger.exception("Callback execution fault: %s", exc)
 
 # ============================================================
-# ADMIN INPUT LISTENER
+# ADMIN INPUT CAPTURE (UNIVERSAL BROADCAST & MEDIA)
 # ============================================================
 
 async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1983,7 +2139,7 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if state == "awaiting_broadcast_payload":
         ADMIN_STATE.pop(user.id, None)
-        status_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Broadcasting message...</code>")
+        status_msg = await update.message.reply_text("⚡ <code>Transmitting payload to all registered operatives...</code>", parse_mode=ParseMode.HTML)
 
         conn = db_connection()
         try:
@@ -2013,12 +2169,12 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception:
             pass
 
-        await reply_safe_text(
-            update.message,
+        await update.message.reply_text(
             f"┌───「 <b>TRANSMISSION REPORT</b> 」───\n"
-            f"│ 📤 Delivered: {sent}\n"
-            f"│ {EMOJI_CROSS} Failed: {failed}\n"
-            f"└────────────────────────────────"
+            f"│ 📤 <b>Successfully Delivered:</b> {sent}\n"
+            f"│ ❌ <b>Blocked / Failed:</b> {failed}\n"
+            f"└────────────────────────────────",
+            parse_mode=ParseMode.HTML,
         )
         await admin_command(update, context)
         return
@@ -2027,59 +2183,69 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
         if update.message and update.message.text:
             set_setting("welcome_text", update.message.text)
             ADMIN_STATE.pop(user.id, None)
-            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Text Updated!</b>")
+            await update.message.reply_text("✅ <b>Welcome Text Updated Successfully!</b>", parse_mode=ParseMode.HTML)
             await admin_command(update, context)
             return
 
     elif state == "awaiting_welcome_media":
         if update.message and update.message.video:
-            set_setting("welcome_media_id", update.message.video.file_id)
+            fid = update.message.video.file_id
+            set_setting("welcome_media_id", fid)
             set_setting("welcome_media_type", "video")
             ADMIN_STATE.pop(user.id, None)
-            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Video Updated!</b>")
+            await update.message.reply_text("✅ <b>Welcome Video Uploaded & Linked!</b>", parse_mode=ParseMode.HTML)
             await admin_command(update, context)
             return
         elif update.message and update.message.photo:
-            set_setting("welcome_media_id", update.message.photo[-1].file_id)
+            fid = update.message.photo[-1].file_id
+            set_setting("welcome_media_id", fid)
             set_setting("welcome_media_type", "photo")
             ADMIN_STATE.pop(user.id, None)
-            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Photo Updated!</b>")
+            await update.message.reply_text("✅ <b>Welcome Photo Uploaded & Linked!</b>", parse_mode=ParseMode.HTML)
             await admin_command(update, context)
+            return
+        else:
+            await update.message.reply_text("⚠️ Please send a valid Video or Photo.")
             return
 
     elif state == "awaiting_channel":
         if update.message and update.message.text:
             parts = update.message.text.strip().split()
             if len(parts) >= 2:
-                ok = add_force_channel(parts[0], parts[1])
+                uname = parts[0]
+                link = parts[1]
+                ok = add_force_channel(uname, link)
                 ADMIN_STATE.pop(user.id, None)
                 if ok:
-                    await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Channel added!</b>")
+                    await update.message.reply_text("✅ <b>Channel Successfully Added to Force-Join List!</b>", parse_mode=ParseMode.HTML)
                 else:
-                    await reply_safe_text(update.message, f"{EMOJI_CROSS} Channel already exists.")
+                    await update.message.reply_text("❌ Channel already exists in database.")
                 await admin_command(update, context)
+                return
+            else:
+                await update.message.reply_text("❌ Format error. Send: <code>@username https://t.me/link</code>", parse_mode=ParseMode.HTML)
                 return
 
 # ============================================================
-# ADMIN USER MANAGEMENT PROTOCOLS
+# ADMIN USER INSPECTOR & MANAGEMENT COMMANDS
 # ============================================================
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/info &lt;user_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/info &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric User ID required.")
+        await update.message.reply_text("❌ Numeric User ID required.")
         return
 
     reset_daily_usage_if_needed(uid)
     row = get_user(uid)
     if not row:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
+        await update.message.reply_text("❌ Operative not found in database.", parse_mode=ParseMode.HTML)
         return
 
     class DummyUser:
@@ -2087,102 +2253,102 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         id = uid
 
     card = format_status_card(row, DummyUser)
-    await reply_safe_text(update.message, card)
+    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
 
 async def setreferral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setreferral &lt;credits&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setreferral &lt;credits&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
+        await update.message.reply_text("❌ Positive integer required.")
         return
     set_setting("referral_bonus", str(val))
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Referral Bonus set to: <b>+{val} Search Credits / Invite</b>")
+    await update.message.reply_text(f"✅ Referral Bonus set to: <b>+{val} Search Credits / Recruit</b>", parse_mode=ParseMode.HTML)
 
 async def setprivate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setprivate &lt;limit&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setprivate &lt;limit&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
+        await update.message.reply_text("❌ Positive integer required.")
         return
     set_setting("private_limit", str(val))
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Global Private Daily Limit set to: <b>{val}</b>")
+    await update.message.reply_text(f"✅ Global Private Daily Limit set to: <b>{val}</b>", parse_mode=ParseMode.HTML)
 
 async def setgroupcredit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setgroupcredit &lt;limit&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setgroupcredit &lt;limit&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
+        await update.message.reply_text("❌ Positive integer required.")
         return
     set_setting("group_limit", str(val))
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Global Group Daily Limit set to: <b>{val}</b>")
+    await update.message.reply_text(f"✅ Global Group Daily Limit set to: <b>{val}</b>", parse_mode=ParseMode.HTML)
 
 async def setfreeze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setfreeze &lt;minutes&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setfreeze &lt;minutes&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         mins = int(context.args[0])
         if mins <= 0:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer in minutes required.")
+        await update.message.reply_text("❌ Positive integer in minutes required.")
         return
     set_setting("freeze_minutes", str(mins))
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Freeze Timer set to: <b>{mins} Minutes</b>")
+    await update.message.reply_text(f"✅ Anti-Spam Freeze Timer updated to: <b>{mins} Minutes</b>", parse_mode=ParseMode.HTML)
 
 async def setlogchannel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setlogchannel &lt;channel_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setlogchannel &lt;channel_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         ch_id = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Integer Channel ID required (e.g. -100123456789).")
+        await update.message.reply_text("❌ Integer Channel ID required (e.g. -100123456789).")
         return
     set_setting("audit_log_channel", str(ch_id))
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Log Channel configured: <code>{ch_id}</code>")
+    await update.message.reply_text(f"✅ Private Surveillance Channel configured to: <code>{ch_id}</code>", parse_mode=ParseMode.HTML)
 
 async def setunlimited_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setunlimited &lt;user_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setunlimited &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Integer User ID required.")
+        await update.message.reply_text("❌ Integer User ID required.")
         return
     conn = db_connection()
     try:
         row = conn.execute("SELECT is_unlimited FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
+            await update.message.reply_text("❌ Operative not found in database.")
             return
         new_state = 0 if row["is_unlimited"] else 1
         conn.execute("UPDATE users SET is_unlimited = ?, updated_at = ? WHERE user_id = ?", (new_state, iso_now(), uid))
@@ -2190,27 +2356,27 @@ async def setunlimited_command(update: Update, context: ContextTypes.DEFAULT_TYP
     finally:
         conn.close()
 
-    status_str = "GRANTED (Unlimited Active)" if new_state else "REVOKED (Standard Quota)"
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Unlimited Status for <code>{uid}</code>: <b>{status_str}</b>")
+    status_str = "GRANTED (Unlimited Active)" if new_state else "REVOKED (Back to Standard Quota)"
+    await update.message.reply_text(f"✅ Unlimited Access for <code>{uid}</code>: <b>{status_str}</b>", parse_mode=ParseMode.HTML)
 
 async def setuserlimit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 2:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setuserlimit &lt;user_id&gt; &lt;limit&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/setuserlimit &lt;user_id&gt; &lt;limit&gt;</code>\n<i>Note: Use -1 to reset to global default.</i>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
         limit_val = int(context.args[1])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} User ID and Limit must be integers.")
+        await update.message.reply_text("❌ User ID and Limit must be integers.")
         return
 
     conn = db_connection()
     try:
         row = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
+            await update.message.reply_text("❌ Operative not found in database.")
             return
         conn.execute(
             """
@@ -2226,14 +2392,14 @@ async def setuserlimit_command(update: Update, context: ContextTypes.DEFAULT_TYP
     finally:
         conn.close()
 
-    desc = "Global Default" if limit_val < 0 else f"{limit_val} Searches / Day"
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Custom Daily Limit for <code>{uid}</code>: <b>{desc}</b>")
+    limit_desc = "Reset to Global Default" if limit_val < 0 else f"{limit_val} Searches / Day"
+    await update.message.reply_text(f"✅ Custom Daily Limit for <code>{uid}</code> set to: <b>{limit_desc}</b>", parse_mode=ParseMode.HTML)
 
 async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 2:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/giveoneday &lt;user_id&gt; &lt;credits&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/giveoneday &lt;user_id&gt; &lt;credits&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
@@ -2241,14 +2407,14 @@ async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if credits_val < 0:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} User ID and Credits must be positive integers.")
+        await update.message.reply_text("❌ User ID and Credits must be positive integers.")
         return
 
     conn = db_connection()
     try:
         row = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
+            await update.message.reply_text("❌ Operative not found in database.")
             return
         conn.execute(
             """
@@ -2263,7 +2429,7 @@ async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     finally:
         conn.close()
 
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Added <b>+{credits_val} 1-Day Temporary Credits</b> to operative <code>{uid}</code>.")
+    await update.message.reply_text(f"✅ Added <b>+{credits_val} 1-Day Temporary Credits</b> to operative <code>{uid}</code>.", parse_mode=ParseMode.HTML)
 
 async def blockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
@@ -2275,7 +2441,7 @@ async def blockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await reply_safe_text(update.message, f"{EMOJI_CROSS} <b>All non-admin operatives have been blacklisted.</b>")
+    await update.message.reply_text("🚫 <b>All non-admin operatives have been blacklisted.</b>", parse_mode=ParseMode.HTML)
 
 async def unblockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
@@ -2286,21 +2452,21 @@ async def unblockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         conn.commit()
     finally:
         conn.close()
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>All operatives unblocked.</b>")
+    await update.message.reply_text("✅ <b>All operatives have been unblocked / whitelisted.</b>", parse_mode=ParseMode.HTML)
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ban &lt;user_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/ban &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
+        await update.message.reply_text("❌ Numeric ID required.")
         return
     if is_admin(uid):
-        await reply_safe_text(update.message, f"{EMOJI_SHIELD} Administrators cannot be blacklisted.")
+        await update.message.reply_text("🛡 Administrators cannot be banned.")
         return
     conn = db_connection()
     try:
@@ -2308,18 +2474,18 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative <code>{uid}</code> blacklisted.")
+    await update.message.reply_text(f"🚫 Operative <code>{uid}</code> blacklisted.", parse_mode=ParseMode.HTML)
 
 async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/unban &lt;user_id&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/unban &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
+        await update.message.reply_text("❌ Numeric ID required.")
         return
     conn = db_connection()
     try:
@@ -2327,13 +2493,13 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Operative <code>{uid}</code> whitelisted.")
+    await update.message.reply_text(f"✅ Operative <code>{uid}</code> whitelisted.", parse_mode=ParseMode.HTML)
 
 async def createplan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 3:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/createplan &lt;NAME&gt; &lt;DAYS&gt; &lt;USES&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/createplan &lt;NAME&gt; &lt;DAYS&gt; &lt;USES&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         name = " ".join(context.args[:-2]).strip()
@@ -2342,49 +2508,52 @@ async def createplan_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if days <= 0 or uses <= 0 or not name:
             raise ValueError
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integers required for Days and Uses.")
+        await update.message.reply_text("❌ Positive integers required for Days and Uses.")
         return
     try:
         pid = create_plan(name, days, uses)
-        await reply_safe_text(update.message, f"{EMOJI_CHECK} Plan Created! 🆔 <code>{pid}</code> | 📛 <b>{html.escape(name)}</b> | ⏳ {days}d | 🔢 {uses} Quota")
+        await update.message.reply_text(
+            f"✅ <b>Plan Created!</b>\n🆔 ID: <code>{pid}</code> | 📛 Name: <b>{html.escape(name)}</b> | ⏳ {days}d | 🔢 {uses} Quota",
+            parse_mode=ParseMode.HTML,
+        )
     except sqlite3.IntegrityError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Plan with this name already exists.")
+        await update.message.reply_text("❌ A plan with this exact name already exists.")
 
 async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) != 2:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/grant &lt;USER_ID&gt; &lt;PLAN_ID&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/grant &lt;USER_ID&gt; &lt;PLAN_ID&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
         pid = int(context.args[1])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numbers required for IDs.")
+        await update.message.reply_text("❌ Numbers required for IDs.")
         return
     row = get_user(uid)
     if not row:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} User must trigger /start first.")
+        await update.message.reply_text("❌ Operative must trigger /start first.")
         return
     ok, msg = assign_plan(uid, pid)
-    await reply_safe_text(update.message, (f"{EMOJI_CHECK} " if ok else f"{EMOJI_CROSS} ") + msg)
+    await update.message.reply_text(("✅ " if ok else "❌ ") + msg, parse_mode=ParseMode.HTML)
 
 async def revoke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/revoke &lt;USER_ID&gt;</code>")
+        await update.message.reply_text("<b>Syntax:</b> <code>/revoke &lt;USER_ID&gt;</code>", parse_mode=ParseMode.HTML)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
+        await update.message.reply_text("❌ Numeric ID required.")
         return
     revoke_plan(uid)
-    await reply_safe_text(update.message, f"{EMOJI_CHECK} Subscription revoked for <code>{uid}</code>.")
+    await update.message.reply_text(f"✅ Subscription revoked for <code>{uid}</code>.", parse_mode=ParseMode.HTML)
 
 # ============================================================
-# RENDER HTTP HEALTH CHECK
+# RENDER WEB SERVICE PORT BINDING (HTTP HEALTH CHECK)
 # ============================================================
 
 async def health_check_server():
@@ -2403,9 +2572,8 @@ async def health_check_server():
     logger.info("Render Web Service health check listening on port %s", port)
 
 # ============================================================
-# LIFECYCLE HOOKS
+# LIFECYCLE & MENU BUTTON INTEGRATION
 # ============================================================
-
 async def post_init(application: Application):
     asyncio.create_task(health_check_server())
 
@@ -2414,7 +2582,7 @@ async def post_init(application: Application):
         BotCommand("num", "Mobile search (10-digit only)"),
         BotCommand("vehicle", "Vehicle registration RC search"),
         BotCommand("adh", "Identification record lookup"),
-        BotCommand("tg", "Telegram User ID/Handle to mobile"),
+        BotCommand("tg", "Telegram User ID to mobile"),
         BotCommand("gm", "Gmail account lookup"),
         BotCommand("tc", "Truecaller registry intel"),
         BotCommand("pin", "Postal PIN code directory"),
@@ -2426,8 +2594,9 @@ async def post_init(application: Application):
         BotCommand("help", "Command documentation"),
     ]
     await application.bot.set_my_commands(commands)
+    # Yeh line niche wala Menu button permanently force karegi:
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    logger.info("Menu commands & Chat Menu Button set successfully.")
+    logger.info("Menu commands & Chat Menu Button published successfully.")
 
 async def post_shutdown(application: Application):
     global HTTP_CLIENT
@@ -2437,16 +2606,16 @@ async def post_shutdown(application: Application):
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, NetworkError):
-        logger.warning("Network fluctuation: %s", context.error)
+        logger.warning("Network fluctuation caught & suppressed: %s", context.error)
         return
     if isinstance(context.error, Conflict):
-        logger.warning("Bot instance conflict (409) detected. Resolving and waiting...")
+        logger.warning("Bot instance conflict detected. Resolving and waiting for other instance to stop...")
         await asyncio.sleep(2)
         return
     logger.exception("Update handler encountered error:", exc_info=context.error)
 
 # ============================================================
-# ENTRYPOINT
+# MAIN INITIALIZATION (OPTIMIZED HTTPX POOL INJECTED)
 # ============================================================
 
 def main():
@@ -2457,9 +2626,9 @@ def main():
 
     t_request = HTTPXRequest(
         connection_pool_size=60,
-        connect_timeout=15.0,
-        read_timeout=35.0,
-        write_timeout=35.0,
+        connect_timeout=6.0,
+        read_timeout=12.0,
+        write_timeout=12.0,
     )
 
     app = (
@@ -2471,7 +2640,7 @@ def main():
         .build()
     )
 
-    # Core User Handlers
+    # Core User Command Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ref", ref_command))
     app.add_handler(CommandHandler("referral", ref_command))
@@ -2491,7 +2660,7 @@ def main():
     app.add_handler(CommandHandler("ip", ip_command))
     app.add_handler(CommandHandler("weather", weather_command))
 
-    # Admin Command Handlers
+    # Admin Management Command Handlers
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CommandHandler("user", info_command))
@@ -2511,10 +2680,10 @@ def main():
     app.add_handler(CommandHandler("grant", grant_command))
     app.add_handler(CommandHandler("revoke", revoke_command))
 
-    # Admin Interactive Callbacks
+    # Dynamic Callback Handlers
     app.add_handler(CallbackQueryHandler(admin_callback))
 
-    # Admin Prompts Handler
+    # Admin Text & Multi-Media Prompt Listener
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_admin_inputs))
 
     # Global Error Handler
@@ -2524,9 +2693,15 @@ def main():
         f"\n{BRAND}\n"
         "=====================================================\n"
         "🚀 Terminal Online: Obsidian Trace Core Activated\n"
-        "✨ Resilient Emoji Engine: Active with Auto-Degrade Protection\n"
-        "🛡 Clean Text for Users | Stealth Buttons for Admins\n"
-        "🔄 Auto-Chaining (/tg -> /num) & Dual Resolvers: Ready\n"
+        "🛡 Strict Input Sanitization & Target Shielding: Active\n"
+        "⚡ Resilient 60-Socket Pool & Semaphore Control: Enabled\n"
+        "🛰 Background Surveillance Audit Dispatcher: Connected\n"
+        "🌐 Render Web Service HTTP Port Binding: Armed\n"
+        "🔄 Dual Failover Endpoints (/tg, /gm): Synchronized\n"
+        "🔗 Intel Auto-Chaining (/tg -> /num): Online\n"
+        "👥 Dynamic Referral Bonus Engine (/setreferral): Active\n"
+        "📊 Live Telemetry & Inspector Tools: Integrated\n"
+        "👑 Admin Unlimited Quota & Custom Limits: Armed\n"
         "=====================================================\n"
     )
     app.run_polling(drop_pending_updates=True)
