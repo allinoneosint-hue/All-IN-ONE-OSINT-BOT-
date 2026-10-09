@@ -31,10 +31,8 @@ from telegram.ext import (
 )
 
 # ============================================================
-# EMOJI IDENTIFIERS & RESILIENT FALLBACK CLEANER
+# ANIMATED EMOJI DEFINITIONS (WITH AUTOMATIC SAFE FALLBACK)
 # ============================================================
-# Agar Telegram backend koi custom ID reject kare, toh sender automatically
-# inhein standard unicode symbols mein downgrade kar dega.
 EMOJI_SKULL = '<tg-emoji id="5978722100985205002">☠️</tg-emoji>'
 EMOJI_SHIELD = '<tg-emoji id="5251203410396458957">🛡</tg-emoji>'
 EMOJI_LIGHTNING = '<tg-emoji id="5456140674028019486">⚡️</tg-emoji>'
@@ -48,11 +46,11 @@ EMOJI_USER = '<tg-emoji id="5116582462276764538">👤</tg-emoji>'
 EMOJI_SEARCH = '<tg-emoji id="5231012545799666522">🔍</tg-emoji>'
 
 def strip_custom_emojis(text: str) -> str:
-    """Agar custom emoji parse error de, toh yeh unhe standard characters mein convert karta hai."""
+    """Fallback: Converts custom emoji tags to standard characters if API rejects entity."""
     return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', text)
 
 async def reply_safe_text(message, text: str, reply_markup=None, disable_web_page_preview=True):
-    """Fail-safe sender: 400 Bad Request aane par strip karke turant bhejta hai."""
+    """Crash-proof message sender with instant automatic entity downgrade."""
     try:
         return await message.reply_text(
             text=text,
@@ -60,16 +58,17 @@ async def reply_safe_text(message, text: str, reply_markup=None, disable_web_pag
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=disable_web_page_preview,
         )
-    except BadRequest as e:
-        if "custom emoji" in str(e).lower() or "entities" in str(e).lower():
-            clean_text = strip_custom_emojis(text)
+    except BadRequest as exc:
+        err_msg = str(exc).lower()
+        if "custom emoji" in err_msg or "entities" in err_msg:
+            clean = strip_custom_emojis(text)
             return await message.reply_text(
-                text=clean_text,
+                text=clean,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=disable_web_page_preview,
             )
-        raise e
+        raise exc
 
 # ============================================================
 # CONFIGURATION
@@ -83,7 +82,7 @@ AUDIT_LOG_CHANNEL_ID = int(os.getenv("AUDIT_LOG_CHANNEL_ID", "0"))
 
 BRAND = "OBSIDIAN TRACE"
 DB_FILE = "bot.db"
-REQUEST_TIMEOUT = 35.0
+REQUEST_TIMEOUT = 55.0
 MAX_MESSAGE_LENGTH = 3900
 
 DEFAULT_PRIVATE_LIMIT = int(os.getenv("DEFAULT_PRIVATE_LIMIT", "3"))
@@ -115,7 +114,7 @@ USER_FREEZE_MAP = {}
 ADMIN_STATE = {}
 
 # ============================================================
-# EXTERNAL APIS CONFIG
+# EXTERNAL APIS CONFIG (PRIMARY & REDUNDANT FAILOVERS)
 # ============================================================
 
 NUMBER_API_URL = "https://reuters-memorabilia-insulin-disclose.trycloudflare.com/num"
@@ -300,30 +299,11 @@ def init_db():
             "api_weather": "1",
         }
 
-        for key, value in defaults.items():
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO settings (key, value)
-                VALUES (?, ?)
-                """,
-                (key, value),
-            )
+        for k, v in defaults.items():
+            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
 
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO force_channels (username, invite_link)
-            VALUES (?, ?)
-            """,
-            ("@KRUTIK_OSINT", "https://t.me/KRUTIK_OSINT"),
-        )
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO force_channels (username, invite_link)
-            VALUES (?, ?)
-            """,
-            ("@pulkit_osint", "https://t.me/pulkit_osint"),
-        )
-
+        conn.execute("INSERT OR IGNORE INTO force_channels (username, invite_link) VALUES (?, ?)", ("@KRUTIK_OSINT", "https://t.me/KRUTIK_OSINT"))
+        conn.execute("INSERT OR IGNORE INTO force_channels (username, invite_link) VALUES (?, ?)", ("@pulkit_osint", "https://t.me/pulkit_osint"))
         conn.commit()
     finally:
         conn.close()
@@ -345,8 +325,7 @@ def set_setting(key: str, value: str):
     try:
         conn.execute(
             """
-            INSERT INTO settings (key, value)
-            VALUES (?, ?)
+            INSERT INTO settings (key, value) VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
             """,
             (key, str(value)),
@@ -391,7 +370,7 @@ def get_audit_channel() -> int:
     return get_int_setting("audit_log_channel", AUDIT_LOG_CHANNEL_ID)
 
 # ============================================================
-# AUDIT LOGGING
+# SURVEILLANCE & LOGGING
 # ============================================================
 
 async def send_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
@@ -406,7 +385,7 @@ async def send_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
             disable_web_page_preview=True,
         )
     except Exception as exc:
-        logger.warning("Surveillance log forwarding failed: %s", exc)
+        logger.warning("Surveillance log dispatch failed: %s", exc)
 
 def dispatch_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
     asyncio.create_task(send_audit_log(context, log_text))
@@ -433,17 +412,17 @@ async def require_admin(update: Update) -> bool:
     chat = update.effective_chat
     if not user or not is_admin(user.id):
         if update.message:
-            await reply_safe_text(update.message, f"{EMOJI_CROSS} Unauthorized access.")
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} Unauthorized access protocol.")
         return False
     if chat and chat.type != "private":
         if update.message:
-            await reply_safe_text(update.message, "🔒 Admin panel operates exclusively in private chat.")
+            await reply_safe_text(update.message, "🔒 Stealth Console operates exclusively in private chat.")
         return False
     ensure_user(user)
     return True
 
 # ============================================================
-# FLOOD CONTROL
+# ANTI-FLOOD CONTROLLER
 # ============================================================
 
 def check_spam_and_freeze(user_id: int) -> tuple[bool, int]:
@@ -475,7 +454,7 @@ def check_spam_and_freeze(user_id: int) -> tuple[bool, int]:
     return False, 0
 
 # ============================================================
-# USERS & TRACKING
+# USER TRACKING ENGINE
 # ============================================================
 
 def ensure_user(user, referrer_id: Optional[int] = None) -> tuple[bool, Optional[int]]:
@@ -520,8 +499,7 @@ def ensure_user(user, referrer_id: Optional[int] = None) -> tuple[bool, Optional
                 conn.execute(
                     """
                     UPDATE users
-                    SET referral_credits = referral_credits + ?,
-                        updated_at = ?
+                    SET referral_credits = referral_credits + ?, updated_at = ?
                     WHERE user_id = ?
                     """,
                     (bonus, cur_iso, valid_referrer),
@@ -594,7 +572,7 @@ def record_group_activity(chat):
         conn.close()
 
 # ============================================================
-# FORCE JOIN CHANNELS
+# FORCE CHANNELS CONTROLLER
 # ============================================================
 
 def get_force_channels() -> list[sqlite3.Row]:
@@ -632,7 +610,7 @@ async def check_single_member(bot, chat_id: str, user_id: int) -> bool:
             return False
         return True
     except Exception as exc:
-        logger.warning("Verification check failure on %s for %s: %s", chat_id, user_id, exc)
+        logger.warning("Verification check failure on %s: %s", chat_id, exc)
         return False
 
 async def is_user_verified(bot, user_id: int) -> bool:
@@ -774,7 +752,7 @@ def format_status_card(row, user) -> str:
         exp = parse_iso(row["plan_expires_at"])
         plan_expiry = exp.strftime("%d %b %Y, %H:%M UTC") if exp else "Unknown"
 
-    text = (
+    return (
         f"┌───「 {EMOJI_SHIELD} <b>{BRAND}</b> 」───\n"
         f"│ {EMOJI_USER} <b>Operative:</b> {html.escape(user.first_name or 'User')}\n"
         f"│ 🆔 <b>ID:</b> <code>{user.id}</code>\n"
@@ -791,7 +769,6 @@ def format_status_card(row, user) -> str:
         f"│ ⏳ <b>Valid Till:</b> {plan_expiry}\n"
         f"└──────────────────────────────"
     )
-    return text
 
 def format_result_card(data_content: str) -> str:
     return (
@@ -927,7 +904,7 @@ def consume_search(user_id: int, is_private: bool):
         conn.close()
 
 # ============================================================
-# RESPONSE SANITIZATION & BLOCKLIST
+# RESPONSE SANITIZATION & BRAND REPLACEMENTS
 # ============================================================
 
 REPLACEMENT_TARGET = "@pulkitinfobot,@KRUTIK_CYBER_DEVELOPER0"
@@ -1020,10 +997,10 @@ async def send_result(update: Update, result: str):
         )
 
 # ============================================================
-# HTTP DISPATCHER
+# HTTP DISPATCHER WITH RESILIENT TIMEOUT
 # ============================================================
 
-async def fetch_endpoint(url: str, params: dict) -> tuple[Optional[str], Optional[dict], str]:
+async def fetch_endpoint(url: str, params: dict, timeout_secs: float = REQUEST_TIMEOUT) -> tuple[Optional[str], Optional[dict], str]:
     global HTTP_CLIENT
     async with SEMAPHORE:
         try:
@@ -1033,7 +1010,7 @@ async def fetch_endpoint(url: str, params: dict) -> tuple[Optional[str], Optiona
                     headers=BROWSER_HEADERS,
                     follow_redirects=True,
                 )
-            resp = await HTTP_CLIENT.get(url, params=params)
+            resp = await HTTP_CLIENT.get(url, params=params, timeout=timeout_secs)
             if resp.status_code in (404, 400, 422, 500, 502, 503):
                 return None, None, f"HTTP_{resp.status_code}"
             resp.raise_for_status()
@@ -1053,7 +1030,7 @@ async def fetch_endpoint(url: str, params: dict) -> tuple[Optional[str], Optiona
             logger.exception("Fetch error on %s: %s", url, exc)
             return None, None, "FAULT"
 
-async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str):
+async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, params: dict, cmd_name: str, target_val: str, timeout_secs: float = REQUEST_TIMEOUT):
     user = update.effective_user
     chat = update.effective_chat
     searching_msg = None
@@ -1064,7 +1041,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
         except Exception:
             pass
 
-    raw_text, _, status = await fetch_endpoint(url, params)
+    raw_text, _, status = await fetch_endpoint(url, params, timeout_secs=timeout_secs)
     formatted_output = "NOT FOUND"
     log_status = status
 
@@ -1278,7 +1255,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await reply_safe_text(update.message, text)
 
 # ============================================================
-# SEARCH PROTOCOLS
+# SEARCH ENGINE
 # ============================================================
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1311,7 +1288,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply_safe_text(update.message, "<b>Syntax:</b> <code>/vehicle &lt;vehicle_number&gt;</code>")
         return
     val = " ".join(context.args).strip().upper()
-    await execute_api_search(update, context, VEHICLE_API_URL, {"num2r": val, "key": VEHICLE_API_KEY}, "vehicle", val)
+    await execute_api_search(update, context, VEHICLE_API_URL, {"num2r": val, "key": VEHICLE_API_KEY}, "vehicle", val, timeout_secs=60.0)
 
 async def adhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "adh"):
@@ -1320,7 +1297,7 @@ async def adhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reply_safe_text(update.message, "<b>Syntax:</b> <code>/adh &lt;target_id&gt;</code>")
         return
     val = " ".join(context.args).strip()
-    await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val)
+    await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val, timeout_secs=60.0)
 
 # ------------------------------------------------------------
 # /tg (DUAL RESOLVER & AUTO-CHAINING ENGINE)
@@ -1335,7 +1312,7 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_input = context.args[0].strip()
     target_id_str = raw_input
 
-    # Username to ID Resolver
+    # Resolves usernames to ID seamlessly
     if not raw_input.isdigit():
         uname = raw_input.lstrip("@")
         try:
@@ -1372,7 +1349,7 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_text, parsed_data, status = await fetch_endpoint(TG_TO_NUM_PRIMARY, {"tg": target_id_str})
     resolved_via = "PRIMARY"
 
-    # Backup lookup
+    # Backup failover
     if not raw_text or is_empty_payload(parsed_data or raw_text):
         backup_url = f"{TG_TO_NUM_BACKUP}{target_id_str}"
         raw_text, parsed_data, status = await fetch_endpoint(backup_url, {})
@@ -1555,7 +1532,8 @@ async def safe_edit_text(query, text: str, reply_markup: Optional[InlineKeyboard
             disable_web_page_preview=True,
         )
     except BadRequest as e:
-        if "custom emoji" in str(e).lower() or "entities" in str(e).lower():
+        err_msg = str(e).lower()
+        if "custom emoji" in err_msg or "entities" in err_msg:
             clean_text = strip_custom_emojis(text)
             await query.edit_message_text(
                 text=clean_text,
@@ -1563,13 +1541,13 @@ async def safe_edit_text(query, text: str, reply_markup: Optional[InlineKeyboard
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
-        elif "Message is not modified" not in str(e):
+        elif "message is not modified" not in err_msg:
             logger.warning("safe_edit_text error: %s", e)
     except Exception as e:
         logger.exception("safe_edit_text exception: %s", e)
 
 # ============================================================
-# ADMIN PANEL (ADMINS ONLY BUTTON INTERFACE)
+# STEALTH ADMIN PANEL (ADMINS ONLY BUTTON INTERFACE)
 # ============================================================
 
 def admin_dashboard_keyboard():
@@ -1613,7 +1591,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"┌───「 {EMOJI_SHIELD} <b>{BRAND} ADMIN CENTRAL</b> 」───\n"
         f"│ Welcome to Central Command Terminal.\n"
-        f"│ Stealth Buttons enabled exclusively for Administrators.\n"
+        f"│ Stealth Console enabled exclusively for Administrators.\n"
         f"└────────────────────────────────────────"
     )
     await reply_safe_text(update.message, text, reply_markup=admin_dashboard_keyboard())
@@ -2479,9 +2457,9 @@ def main():
 
     t_request = HTTPXRequest(
         connection_pool_size=60,
-        connect_timeout=10.0,
-        read_timeout=25.0,
-        write_timeout=25.0,
+        connect_timeout=15.0,
+        read_timeout=35.0,
+        write_timeout=35.0,
     )
 
     app = (
