@@ -31,8 +31,10 @@ from telegram.ext import (
 )
 
 # ============================================================
-# ANIMATED EMOJI CONSTANTS (LOADED FROM IDS.TXT)
+# EMOJI IDENTIFIERS & RESILIENT FALLBACK CLEANER
 # ============================================================
+# Agar Telegram backend koi custom ID reject kare, toh sender automatically
+# inhein standard unicode symbols mein downgrade kar dega.
 EMOJI_SKULL = '<tg-emoji id="5978722100985205002">☠️</tg-emoji>'
 EMOJI_SHIELD = '<tg-emoji id="5251203410396458957">🛡</tg-emoji>'
 EMOJI_LIGHTNING = '<tg-emoji id="5456140674028019486">⚡️</tg-emoji>'
@@ -44,6 +46,30 @@ EMOJI_CROSS = '<tg-emoji id="5210952531676504517">❌</tg-emoji>'
 EMOJI_RADAR = '<tg-emoji id="5116508099213001597">🚨</tg-emoji>'
 EMOJI_USER = '<tg-emoji id="5116582462276764538">👤</tg-emoji>'
 EMOJI_SEARCH = '<tg-emoji id="5231012545799666522">🔍</tg-emoji>'
+
+def strip_custom_emojis(text: str) -> str:
+    """Agar custom emoji parse error de, toh yeh unhe standard characters mein convert karta hai."""
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', text)
+
+async def reply_safe_text(message, text: str, reply_markup=None, disable_web_page_preview=True):
+    """Fail-safe sender: 400 Bad Request aane par strip karke turant bhejta hai."""
+    try:
+        return await message.reply_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=disable_web_page_preview,
+        )
+    except BadRequest as e:
+        if "custom emoji" in str(e).lower() or "entities" in str(e).lower():
+            clean_text = strip_custom_emojis(text)
+            return await message.reply_text(
+                text=clean_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+        raise e
 
 # ============================================================
 # CONFIGURATION
@@ -375,7 +401,7 @@ async def send_audit_log(context: ContextTypes.DEFAULT_TYPE, log_text: str):
     try:
         await context.bot.send_message(
             chat_id=log_ch,
-            text=log_text,
+            text=strip_custom_emojis(log_text),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -407,11 +433,11 @@ async def require_admin(update: Update) -> bool:
     chat = update.effective_chat
     if not user or not is_admin(user.id):
         if update.message:
-            await update.message.reply_text(f"{EMOJI_CROSS} Unauthorized access.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} Unauthorized access.")
         return False
     if chat and chat.type != "private":
         if update.message:
-            await update.message.reply_text("🔒 Admin panel operates exclusively in private chat.")
+            await reply_safe_text(update.message, "🔒 Admin panel operates exclusively in private chat.")
         return False
     ensure_user(user)
     return True
@@ -713,7 +739,7 @@ def plan_is_active(user_row) -> bool:
     return True
 
 # ============================================================
-# UI FORMATTERS & ANIMATED CARDS
+# UI FORMATTERS
 # ============================================================
 
 def make_bar(current: int, total: int, length: int = 8) -> str:
@@ -796,12 +822,12 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
     is_frozen, rem_mins = check_spam_and_freeze(user.id)
     if is_frozen:
         if update.message:
-            await update.message.reply_text(
+            await reply_safe_text(
+                update.message,
                 f"┌───「 {EMOJI_WARN} <b>FLOOD CONTROL ENGAGED</b> 」───\n"
                 f"│ Excessive query requests detected!\n"
                 f"│ Terminal frozen for <b>{rem_mins} minute(s)</b>.\n"
-                f"└────────────────────────────────────────",
-                parse_mode=ParseMode.HTML,
+                f"└────────────────────────────────────────"
             )
         return False
 
@@ -814,17 +840,17 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if row["is_banned"]:
         if update.message:
-            await update.message.reply_text(f"{EMOJI_CROSS} <b>Access Revoked:</b> You are permanently blacklisted.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} <b>Access Revoked:</b> You are permanently blacklisted.")
         return False
 
     if not bot_enabled():
         if update.message:
-            await update.message.reply_text("🔴 <b>System Offline:</b> Maintenance in progress.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, "🔴 <b>System Offline:</b> Maintenance in progress.")
         return False
 
     if not api_is_active(api_cmd):
         if update.message:
-            await update.message.reply_text(f"{EMOJI_WARN} <b>Suspended:</b> <code>/{api_cmd}</code> disabled by admin.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_WARN} <b>Suspended:</b> <code>/{api_cmd}</code> disabled by admin.")
         return False
 
     verified = await is_user_verified(context.bot, user.id)
@@ -832,13 +858,13 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
         channels = get_force_channels()
         ch_list = "\n".join([f"• {c['username']} ➔ {c['invite_link']}" for c in channels])
         if update.message:
-            await update.message.reply_text(
+            await reply_safe_text(
+                update.message,
                 f"┌───「 {EMOJI_WARN} <b>CHANNEL VERIFICATION REQUIRED</b> 」───\n"
                 f"│ Please subscribe to official channels:\n\n{ch_list}\n\n"
                 f"│ Tap /start once joined to unlock access.\n"
                 f"└────────────────────────────────────────",
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
+                disable_web_page_preview=True
             )
         return False
 
@@ -859,13 +885,13 @@ async def check_search_access(update: Update, context: ContextTypes.DEFAULT_TYPE
         return True
 
     if update.message:
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"┌───「 {EMOJI_CROSS} <b>SEARCH LIMIT EXHAUSTED</b> 」───\n"
             f"│ Daily search balance is complete.\n"
             f"├───「 {EMOJI_CROWN} <b>CONTACT ADMINS</b> 」───\n"
             f"│ {EMOJI_LIGHTNING} <b>{OWNER_CONTACTS}</b>\n"
-            f"└────────────────────────────────────────",
-            parse_mode=ParseMode.HTML,
+            f"└────────────────────────────────────────"
         )
     return False
 
@@ -975,7 +1001,7 @@ async def send_result(update: Update, result: str):
     card = format_result_card(result)
     if len(card) <= MAX_MESSAGE_LENGTH:
         try:
-            await update.message.reply_text(card, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            await reply_safe_text(update.message, card, disable_web_page_preview=True)
             return
         except Exception:
             pass
@@ -987,9 +1013,9 @@ async def send_result(update: Update, result: str):
         chunks.append(result[start_pos:end_pos])
         start_pos = end_pos
     for idx, c in enumerate(chunks, 1):
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"<b>[PART {idx}/{len(chunks)}]</b>\n<pre>{html.escape(c)}</pre>",
-            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
 
@@ -1034,7 +1060,7 @@ async def execute_api_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     if update.message:
         try:
-            searching_msg = await update.message.reply_text(f"{EMOJI_LIGHTNING} <code>Connecting to decentralized nodes... querying ⏳</code>", parse_mode=ParseMode.HTML)
+            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Connecting to decentralized nodes... querying ⏳</code>")
         except Exception:
             pass
 
@@ -1143,14 +1169,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not verified:
         channels = get_force_channels()
         ch_list = "\n".join([f"• {c['username']} ➔ {c['invite_link']}" for c in channels])
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"┌───「 {EMOJI_SHIELD} <b>{BRAND}</b> 」───\n"
             f"│ 🔒 <b>ACCESS DENIED: Dual Subscription Required!</b>\n"
             f"├───「 <b>MANDATORY CHANNELS</b> 」───\n"
             f"{ch_list}\n\n"
             f"Join both channels, then send /start again to proceed.\n"
             f"└──────────────────────────────",
-            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
         return
@@ -1170,18 +1196,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if m_id and m_type == "video":
         try:
-            await update.message.reply_video(video=m_id, caption=caption, parse_mode=ParseMode.HTML)
+            await update.message.reply_video(video=m_id, caption=strip_custom_emojis(caption), parse_mode=ParseMode.HTML)
             return
         except Exception:
             pass
     elif m_id and m_type == "photo":
         try:
-            await update.message.reply_photo(photo=m_id, caption=caption, parse_mode=ParseMode.HTML)
+            await update.message.reply_photo(photo=m_id, caption=strip_custom_emojis(caption), parse_mode=ParseMode.HTML)
             return
         except Exception:
             pass
 
-    await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, caption)
 
 async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1208,7 +1234,7 @@ async def ref_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ 🎁 <b>Available Referral Balance:</b> <code>{ref_credits}</code> Searches\n"
         f"└────────────────────────────────"
     )
-    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, card)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1224,7 +1250,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     card = format_status_card(row, user)
-    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, card)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1249,7 +1275,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ Contact: {OWNER_CONTACTS}\n"
         f"└──────────────────────────────"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, text)
 
 # ============================================================
 # SEARCH PROTOCOLS
@@ -1259,21 +1285,21 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "num"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/num &lt;10_digit_number&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/num &lt;10_digit_number&gt;</code>")
         return
 
     val = context.args[0].strip()
     if not re.fullmatch(r"\d{10}", val):
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"┌───「 {EMOJI_CROSS} <b>INVALID NUMBER FORMAT</b> 」───\n"
             f"│ Mobile lookup requires exactly <b>10 digits</b>.\n"
-            f"└────────────────────────────────────────",
-            parse_mode=ParseMode.HTML,
+            f"└────────────────────────────────────────"
         )
         return
 
     if val in RESTRICTED_QUERY_NUMBERS:
-        await update.message.reply_text(f"{EMOJI_CROSS} Target identifier is protected under high-security classification.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Target identifier is protected under high-security classification.")
         return
 
     await execute_api_search(update, context, NUMBER_API_URL, {"number": val, "key": NUMBER_API_KEY}, "num", val)
@@ -1282,7 +1308,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "vehicle"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/vehicle &lt;vehicle_number&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/vehicle &lt;vehicle_number&gt;</code>")
         return
     val = " ".join(context.args).strip().upper()
     await execute_api_search(update, context, VEHICLE_API_URL, {"num2r": val, "key": VEHICLE_API_KEY}, "vehicle", val)
@@ -1291,7 +1317,7 @@ async def adhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "adh"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/adh &lt;target_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/adh &lt;target_id&gt;</code>")
         return
     val = " ".join(context.args).strip()
     await execute_api_search(update, context, ADHAR_API_URL, {"num": val, "key": ADHAR_API_KEY}, "adh", val)
@@ -1303,7 +1329,7 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "tg"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/tg &lt;id_or_username&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/tg &lt;id_or_username&gt;</code>")
         return
 
     raw_input = context.args[0].strip()
@@ -1319,17 +1345,17 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_id_str = raw_input
 
     if not re.fullmatch(r"\d{5,16}", target_id_str):
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"┌───「 {EMOJI_CROSS} <b>IDENTIFIER RESOLUTION FAILED</b> 」───\n"
             f"│ Could not resolve to a valid numeric Telegram ID.\n"
             f"│ <b>Format:</b> <code>/tg 6123456789</code> or <code>/tg @handle</code>\n"
-            f"└──────────────────────────────",
-            parse_mode=ParseMode.HTML,
+            f"└──────────────────────────────"
         )
         return
 
     if target_id_str in RESTRICTED_TG_IDS:
-        await update.message.reply_text(f"{EMOJI_CROSS} Telegram ID is protected under security protocols.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Telegram ID is protected under security protocols.")
         return
 
     user = update.effective_user
@@ -1338,7 +1364,7 @@ async def tg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         try:
-            searching_msg = await update.message.reply_text(f"{EMOJI_LIGHTNING} <code>Chaining nodes &amp; querying Telegram directory... ⏳</code>", parse_mode=ParseMode.HTML)
+            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Chaining nodes &amp; querying Telegram directory... ⏳</code>")
         except Exception:
             pass
 
@@ -1411,11 +1437,11 @@ async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "gm"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/gm &lt;target_email&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/gm &lt;target_email&gt;</code>")
         return
     email = " ".join(context.args).strip()
     if "@" not in email or "." not in email:
-        await update.message.reply_text(f"{EMOJI_CROSS} Provide a valid email format.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Provide a valid email format.")
         return
 
     user = update.effective_user
@@ -1424,7 +1450,7 @@ async def gmail_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         try:
-            searching_msg = await update.message.reply_text(f"{EMOJI_LIGHTNING} <code>Scanning email registries... ⏳</code>", parse_mode=ParseMode.HTML)
+            searching_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Scanning email registries... ⏳</code>")
         except Exception:
             pass
 
@@ -1471,7 +1497,7 @@ async def truecaller_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not update.message or not await check_search_access(update, context, "tc"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/tc &lt;phone_number&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/tc &lt;phone_number&gt;</code>")
         return
     number = " ".join(context.args).strip()
     await execute_api_search(update, context, TRUECALLER_API_URL, {"q": number}, "tc", number)
@@ -1480,11 +1506,11 @@ async def pin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "pin"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/pin &lt;pincode&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/pin &lt;pincode&gt;</code>")
         return
     pin = " ".join(context.args).strip()
     if not re.fullmatch(r"\d{4,10}", pin):
-        await update.message.reply_text(f"{EMOJI_CROSS} Postal code must be numeric digits.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Postal code must be numeric digits.")
         return
     await execute_api_search(update, context, PINCODE_API_URL, {"search": pin}, "pin", pin)
 
@@ -1492,7 +1518,7 @@ async def ifsc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "ifsc"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/ifsc &lt;ifsc_code&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ifsc &lt;ifsc_code&gt;</code>")
         return
     code = " ".join(context.args).strip().upper()
     await execute_api_search(update, context, IFSC_API_URL, {"code": code}, "ifsc", code)
@@ -1501,7 +1527,7 @@ async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "ip"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/ip &lt;ip_address&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ip &lt;ip_address&gt;</code>")
         return
     ip_val = " ".join(context.args).strip()
     await execute_api_search(update, context, IP_API_URL, {"ip": ip_val}, "ip", ip_val)
@@ -1510,7 +1536,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not await check_search_access(update, context, "weather"):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/weather &lt;city&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/weather &lt;city&gt;</code>")
         return
     location = " ".join(context.args).strip()
     target_url = f"{WEATHER_API_BASE_URL}/{location}"
@@ -1529,7 +1555,15 @@ async def safe_edit_text(query, text: str, reply_markup: Optional[InlineKeyboard
             disable_web_page_preview=True,
         )
     except BadRequest as e:
-        if "Message is not modified" not in str(e):
+        if "custom emoji" in str(e).lower() or "entities" in str(e).lower():
+            clean_text = strip_custom_emojis(text)
+            await query.edit_message_text(
+                text=clean_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        elif "Message is not modified" not in str(e):
             logger.warning("safe_edit_text error: %s", e)
     except Exception as e:
         logger.exception("safe_edit_text exception: %s", e)
@@ -1582,7 +1616,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"│ Stealth Buttons enabled exclusively for Administrators.\n"
         f"└────────────────────────────────────────"
     )
-    await update.message.reply_text(text, reply_markup=admin_dashboard_keyboard(), parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, text, reply_markup=admin_dashboard_keyboard())
 
 # ============================================================
 # ADMIN SUBMENUS
@@ -1971,7 +2005,7 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if state == "awaiting_broadcast_payload":
         ADMIN_STATE.pop(user.id, None)
-        status_msg = await update.message.reply_text(f"{EMOJI_LIGHTNING} <code>Broadcasting message...</code>", parse_mode=ParseMode.HTML)
+        status_msg = await reply_safe_text(update.message, f"{EMOJI_LIGHTNING} <code>Broadcasting message...</code>")
 
         conn = db_connection()
         try:
@@ -2001,12 +2035,12 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception:
             pass
 
-        await update.message.reply_text(
+        await reply_safe_text(
+            update.message,
             f"┌───「 <b>TRANSMISSION REPORT</b> 」───\n"
             f"│ 📤 Delivered: {sent}\n"
             f"│ {EMOJI_CROSS} Failed: {failed}\n"
-            f"└────────────────────────────────",
-            parse_mode=ParseMode.HTML,
+            f"└────────────────────────────────"
         )
         await admin_command(update, context)
         return
@@ -2015,7 +2049,7 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
         if update.message and update.message.text:
             set_setting("welcome_text", update.message.text)
             ADMIN_STATE.pop(user.id, None)
-            await update.message.reply_text(f"{EMOJI_CHECK} <b>Welcome Text Updated!</b>", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Text Updated!</b>")
             await admin_command(update, context)
             return
 
@@ -2024,14 +2058,14 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
             set_setting("welcome_media_id", update.message.video.file_id)
             set_setting("welcome_media_type", "video")
             ADMIN_STATE.pop(user.id, None)
-            await update.message.reply_text(f"{EMOJI_CHECK} <b>Welcome Video Updated!</b>", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Video Updated!</b>")
             await admin_command(update, context)
             return
         elif update.message and update.message.photo:
             set_setting("welcome_media_id", update.message.photo[-1].file_id)
             set_setting("welcome_media_type", "photo")
             ADMIN_STATE.pop(user.id, None)
-            await update.message.reply_text(f"{EMOJI_CHECK} <b>Welcome Photo Updated!</b>", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Welcome Photo Updated!</b>")
             await admin_command(update, context)
             return
 
@@ -2042,9 +2076,9 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
                 ok = add_force_channel(parts[0], parts[1])
                 ADMIN_STATE.pop(user.id, None)
                 if ok:
-                    await update.message.reply_text(f"{EMOJI_CHECK} <b>Channel added!</b>", parse_mode=ParseMode.HTML)
+                    await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>Channel added!</b>")
                 else:
-                    await update.message.reply_text(f"{EMOJI_CROSS} Channel already exists.")
+                    await reply_safe_text(update.message, f"{EMOJI_CROSS} Channel already exists.")
                 await admin_command(update, context)
                 return
 
@@ -2056,18 +2090,18 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/info &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/info &lt;user_id&gt;</code>")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Numeric User ID required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric User ID required.")
         return
 
     reset_daily_usage_if_needed(uid)
     row = get_user(uid)
     if not row:
-        await update.message.reply_text(f"{EMOJI_CROSS} Operative not found in database.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
         return
 
     class DummyUser:
@@ -2075,102 +2109,102 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         id = uid
 
     card = format_status_card(row, DummyUser)
-    await update.message.reply_text(card, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, card)
 
 async def setreferral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setreferral &lt;credits&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setreferral &lt;credits&gt;</code>")
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Positive integer required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
         return
     set_setting("referral_bonus", str(val))
-    await update.message.reply_text(f"{EMOJI_CHECK} Referral Bonus set to: <b>+{val} Search Credits / Invite</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Referral Bonus set to: <b>+{val} Search Credits / Invite</b>")
 
 async def setprivate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setprivate &lt;limit&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setprivate &lt;limit&gt;</code>")
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Positive integer required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
         return
     set_setting("private_limit", str(val))
-    await update.message.reply_text(f"{EMOJI_CHECK} Global Private Daily Limit set to: <b>{val}</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Global Private Daily Limit set to: <b>{val}</b>")
 
 async def setgroupcredit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setgroupcredit &lt;limit&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setgroupcredit &lt;limit&gt;</code>")
         return
     try:
         val = int(context.args[0])
         if val < 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Positive integer required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer required.")
         return
     set_setting("group_limit", str(val))
-    await update.message.reply_text(f"{EMOJI_CHECK} Global Group Daily Limit set to: <b>{val}</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Global Group Daily Limit set to: <b>{val}</b>")
 
 async def setfreeze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setfreeze &lt;minutes&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setfreeze &lt;minutes&gt;</code>")
         return
     try:
         mins = int(context.args[0])
         if mins <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Positive integer in minutes required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integer in minutes required.")
         return
     set_setting("freeze_minutes", str(mins))
-    await update.message.reply_text(f"{EMOJI_CHECK} Freeze Timer set to: <b>{mins} Minutes</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Freeze Timer set to: <b>{mins} Minutes</b>")
 
 async def setlogchannel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setlogchannel &lt;channel_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setlogchannel &lt;channel_id&gt;</code>")
         return
     try:
         ch_id = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Integer Channel ID required (e.g. -100123456789).", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Integer Channel ID required (e.g. -100123456789).")
         return
     set_setting("audit_log_channel", str(ch_id))
-    await update.message.reply_text(f"{EMOJI_CHECK} Log Channel configured: <code>{ch_id}</code>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Log Channel configured: <code>{ch_id}</code>")
 
 async def setunlimited_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setunlimited &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setunlimited &lt;user_id&gt;</code>")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Integer User ID required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Integer User ID required.")
         return
     conn = db_connection()
     try:
         row = conn.execute("SELECT is_unlimited FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await update.message.reply_text(f"{EMOJI_CROSS} Operative not found in database.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
             return
         new_state = 0 if row["is_unlimited"] else 1
         conn.execute("UPDATE users SET is_unlimited = ?, updated_at = ? WHERE user_id = ?", (new_state, iso_now(), uid))
@@ -2179,26 +2213,26 @@ async def setunlimited_command(update: Update, context: ContextTypes.DEFAULT_TYP
         conn.close()
 
     status_str = "GRANTED (Unlimited Active)" if new_state else "REVOKED (Standard Quota)"
-    await update.message.reply_text(f"{EMOJI_CHECK} Unlimited Status for <code>{uid}</code>: <b>{status_str}</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Unlimited Status for <code>{uid}</code>: <b>{status_str}</b>")
 
 async def setuserlimit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 2:
-        await update.message.reply_text("<b>Syntax:</b> <code>/setuserlimit &lt;user_id&gt; &lt;limit&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/setuserlimit &lt;user_id&gt; &lt;limit&gt;</code>")
         return
     try:
         uid = int(context.args[0])
         limit_val = int(context.args[1])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} User ID and Limit must be integers.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} User ID and Limit must be integers.")
         return
 
     conn = db_connection()
     try:
         row = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await update.message.reply_text(f"{EMOJI_CROSS} Operative not found in database.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
             return
         conn.execute(
             """
@@ -2215,13 +2249,13 @@ async def setuserlimit_command(update: Update, context: ContextTypes.DEFAULT_TYP
         conn.close()
 
     desc = "Global Default" if limit_val < 0 else f"{limit_val} Searches / Day"
-    await update.message.reply_text(f"{EMOJI_CHECK} Custom Daily Limit for <code>{uid}</code>: <b>{desc}</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Custom Daily Limit for <code>{uid}</code>: <b>{desc}</b>")
 
 async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 2:
-        await update.message.reply_text("<b>Syntax:</b> <code>/giveoneday &lt;user_id&gt; &lt;credits&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/giveoneday &lt;user_id&gt; &lt;credits&gt;</code>")
         return
     try:
         uid = int(context.args[0])
@@ -2229,14 +2263,14 @@ async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if credits_val < 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} User ID and Credits must be positive integers.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} User ID and Credits must be positive integers.")
         return
 
     conn = db_connection()
     try:
         row = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,)).fetchone()
         if not row:
-            await update.message.reply_text(f"{EMOJI_CROSS} Operative not found in database.", parse_mode=ParseMode.HTML)
+            await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative not found in database.")
             return
         conn.execute(
             """
@@ -2251,7 +2285,7 @@ async def giveoneday_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     finally:
         conn.close()
 
-    await update.message.reply_text(f"{EMOJI_CHECK} Added <b>+{credits_val} 1-Day Temporary Credits</b> to operative <code>{uid}</code>.", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Added <b>+{credits_val} 1-Day Temporary Credits</b> to operative <code>{uid}</code>.")
 
 async def blockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
@@ -2263,7 +2297,7 @@ async def blockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await update.message.reply_text(f"{EMOJI_CROSS} <b>All non-admin operatives have been blacklisted.</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CROSS} <b>All non-admin operatives have been blacklisted.</b>")
 
 async def unblockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
@@ -2274,21 +2308,21 @@ async def unblockall_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         conn.commit()
     finally:
         conn.close()
-    await update.message.reply_text(f"{EMOJI_CHECK} <b>All operatives unblocked.</b>", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} <b>All operatives unblocked.</b>")
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/ban &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/ban &lt;user_id&gt;</code>")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Numeric ID required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
         return
     if is_admin(uid):
-        await update.message.reply_text(f"{EMOJI_SHIELD} Administrators cannot be blacklisted.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_SHIELD} Administrators cannot be blacklisted.")
         return
     conn = db_connection()
     try:
@@ -2296,18 +2330,18 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await update.message.reply_text(f"{EMOJI_CROSS} Operative <code>{uid}</code> blacklisted.", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CROSS} Operative <code>{uid}</code> blacklisted.")
 
 async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/unban &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/unban &lt;user_id&gt;</code>")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Numeric ID required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
         return
     conn = db_connection()
     try:
@@ -2315,13 +2349,13 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
     finally:
         conn.close()
-    await update.message.reply_text(f"{EMOJI_CHECK} Operative <code>{uid}</code> whitelisted.", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Operative <code>{uid}</code> whitelisted.")
 
 async def createplan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) < 3:
-        await update.message.reply_text("<b>Syntax:</b> <code>/createplan &lt;NAME&gt; &lt;DAYS&gt; &lt;USES&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/createplan &lt;NAME&gt; &lt;DAYS&gt; &lt;USES&gt;</code>")
         return
     try:
         name = " ".join(context.args[:-2]).strip()
@@ -2330,46 +2364,46 @@ async def createplan_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if days <= 0 or uses <= 0 or not name:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Positive integers required for Days and Uses.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Positive integers required for Days and Uses.")
         return
     try:
         pid = create_plan(name, days, uses)
-        await update.message.reply_text(f"{EMOJI_CHECK} Plan Created! 🆔 <code>{pid}</code> | 📛 <b>{html.escape(name)}</b> | ⏳ {days}d | 🔢 {uses} Quota", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CHECK} Plan Created! 🆔 <code>{pid}</code> | 📛 <b>{html.escape(name)}</b> | ⏳ {days}d | 🔢 {uses} Quota")
     except sqlite3.IntegrityError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Plan with this name already exists.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Plan with this name already exists.")
 
 async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if len(context.args) != 2:
-        await update.message.reply_text("<b>Syntax:</b> <code>/grant &lt;USER_ID&gt; &lt;PLAN_ID&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/grant &lt;USER_ID&gt; &lt;PLAN_ID&gt;</code>")
         return
     try:
         uid = int(context.args[0])
         pid = int(context.args[1])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Numbers required for IDs.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numbers required for IDs.")
         return
     row = get_user(uid)
     if not row:
-        await update.message.reply_text(f"{EMOJI_CROSS} User must trigger /start first.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} User must trigger /start first.")
         return
     ok, msg = assign_plan(uid, pid)
-    await update.message.reply_text((f"{EMOJI_CHECK} " if ok else f"{EMOJI_CROSS} ") + msg, parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, (f"{EMOJI_CHECK} " if ok else f"{EMOJI_CROSS} ") + msg)
 
 async def revoke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await require_admin(update):
         return
     if not context.args:
-        await update.message.reply_text("<b>Syntax:</b> <code>/revoke &lt;USER_ID&gt;</code>", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, "<b>Syntax:</b> <code>/revoke &lt;USER_ID&gt;</code>")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.message.reply_text(f"{EMOJI_CROSS} Numeric ID required.", parse_mode=ParseMode.HTML)
+        await reply_safe_text(update.message, f"{EMOJI_CROSS} Numeric ID required.")
         return
     revoke_plan(uid)
-    await update.message.reply_text(f"{EMOJI_CHECK} Subscription revoked for <code>{uid}</code>.", parse_mode=ParseMode.HTML)
+    await reply_safe_text(update.message, f"{EMOJI_CHECK} Subscription revoked for <code>{uid}</code>.")
 
 # ============================================================
 # RENDER HTTP HEALTH CHECK
@@ -2505,14 +2539,14 @@ def main():
     # Admin Prompts Handler
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_admin_inputs))
 
-    # Error Handler
+    # Global Error Handler
     app.add_error_handler(error_handler)
 
     print(
         f"\n{BRAND}\n"
         "=====================================================\n"
         "🚀 Terminal Online: Obsidian Trace Core Activated\n"
-        "✨ Animated Emojis: Loaded from ids.txt & Injected\n"
+        "✨ Resilient Emoji Engine: Active with Auto-Degrade Protection\n"
         "🛡 Clean Text for Users | Stealth Buttons for Admins\n"
         "🔄 Auto-Chaining (/tg -> /num) & Dual Resolvers: Ready\n"
         "=====================================================\n"
